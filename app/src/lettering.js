@@ -1,9 +1,9 @@
 // lettering.js — the giant comic caption: an ALL-CAPS display title plus a
-// sub-caption. White by default with a fat black outline and a magenta/cyan
-// double drop-shadow. The title auto-shrinks and wraps to at most two balanced
-// lines inside a safe margin, and is painted LAST so it bleeds across panel
-// borders without ever being covered by them. v2 keeps the same guarantees
-// (no overflow, no clipped words) with a slightly tighter skew and shadow.
+// sub-caption line. White by default, fat black outline, magenta + cyan double
+// drop-shadow. The title auto-shrinks and wraps into at most two balanced
+// lines inside a safe margin, and it is painted LAST so it bleeds across panel
+// borders without ever being covered by them. v2 keeps those guarantees (no
+// overflow, no clipped words) with a slightly tighter skew and shadow.
 
 const DISPLAY = '"Vice Display", "Arial Black", sans-serif';
 
@@ -15,56 +15,58 @@ export const TITLE_COLORS = [
   { id: 'cyan', name: 'Cyan', swatch: '#00E5FF' },
 ];
 
+// Resolve a colour id to a fill style; two ids are vertical gradients.
 function fillFor(ctx, id, yTop, yBottom) {
   if (id === 'sunset') {
-    const g = ctx.createLinearGradient(0, yTop, 0, yBottom);
-    g.addColorStop(0, '#FFD60A');
-    g.addColorStop(0.5, '#FF7A18');
-    g.addColorStop(1, '#FF2E88');
-    return g;
+    const grad = ctx.createLinearGradient(0, yTop, 0, yBottom);
+    grad.addColorStop(0, '#FFD60A');
+    grad.addColorStop(0.5, '#FF7A18');
+    grad.addColorStop(1, '#FF2E88');
+    return grad;
   }
   if (id === 'gold') {
-    const g = ctx.createLinearGradient(0, yTop, 0, yBottom);
-    g.addColorStop(0, '#FFF3A0');
-    g.addColorStop(1, '#FF9E00');
-    return g;
+    const grad = ctx.createLinearGradient(0, yTop, 0, yBottom);
+    grad.addColorStop(0, '#FFF3A0');
+    grad.addColorStop(1, '#FF9E00');
+    return grad;
   }
   return TITLE_COLORS.find((c) => c.id === id)?.swatch ?? '#FFFFFF';
 }
 
-// Split a long title into two balanced lines at the space nearest the middle.
+// Break a long title into two balanced lines at the space nearest the middle.
 function balancedSplit(text) {
   const words = text.split(/\s+/).filter(Boolean);
   if (words.length < 2) return [text];
-  let cut = 1;
-  let best = Infinity;
+  let bestCut = 1;
+  let bestDiff = Infinity;
   for (let i = 1; i < words.length; i++) {
-    const left = words.slice(0, i).join(' ').length;
-    const right = words.slice(i).join(' ').length;
-    if (Math.abs(left - right) < best) {
-      best = Math.abs(left - right);
-      cut = i;
+    const leftLen = words.slice(0, i).join(' ').length;
+    const rightLen = words.slice(i).join(' ').length;
+    const diff = Math.abs(leftLen - rightLen);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestCut = i;
     }
   }
-  return [words.slice(0, cut).join(' '), words.slice(cut).join(' ')];
+  return [words.slice(0, bestCut).join(' '), words.slice(bestCut).join(' ')];
 }
 
 // Shrink the point size until one line (or two balanced lines) fits maxW.
 function fitTitle(ctx, text, maxW, startPx, minPx) {
-  const options = [[text], balancedSplit(text)];
+  const candidates = [[text], balancedSplit(text)];
   let px = startPx;
   while (px > minPx) {
     ctx.font = `900 ${px}px ${DISPLAY}`;
-    for (const lines of options) {
+    for (const lines of candidates) {
       if (lines.every((ln) => ctx.measureText(ln).width <= maxW)) return { lines, px };
     }
     px *= 0.93;
   }
   ctx.font = `900 ${minPx}px ${DISPLAY}`;
-  return { lines: options[1], px: minPx };
+  return { lines: candidates[1], px: minPx };
 }
 
-// One title line: cyan + magenta hard shadows, fat black outline, bold fill.
+// One title line: hard cyan + magenta shadows, fat black outline, bold fill.
 function paintLine(ctx, line, cx, y, px, fill) {
   ctx.save();
   ctx.textAlign = 'center';
@@ -85,7 +87,7 @@ function paintLine(ctx, line, cx, y, px, fill) {
 
 /**
  * Draw the whole caption block. state.titlePos is top / center / bottom; the
- * block is centred horizontally with a slight poster skew and kept inside a
+ * block is centred horizontally with a slight poster skew and held inside a
  * safe margin so nothing clips at the cover edge.
  */
 export function drawCaption(ctx, state, w, h) {

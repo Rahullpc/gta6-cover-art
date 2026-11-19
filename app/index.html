@@ -1,4 +1,7 @@
 <!doctype html>
+<!-- Vice Cover Studio v2 — the editor shell. Left rail = controls, right = live
+     preview. Every control is wired in src/editor.js by element id; the preview
+     canvas is painted by the same renderer that exports the PNGs. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -9,19 +12,19 @@
 <body>
 <header class="topbar">
   <h1>VICE COVER STUDIO</h1>
-  <p class="tag">GTA-style multi-panel cover maker · face-safe framing · 100% offline · photos never leave this machine</p>
+  <p class="tag">Turn your photos into a GTA-style comic cover · face-safe framing · runs 100% offline · photos stay on this machine</p>
 </header>
 <main class="app">
   <aside class="rail">
     <div class="rail-scroll-wrap">
     <div class="rail-scroll" id="railScroll">
     <section>
-      <h2>1 · Photos <span id="photoCount" class="count">0/5</span></h2>
+      <h2>1 · Your photos <span id="photoCount" class="count">0/5</span></h2>
       <div id="dropZone" class="drop">
-        <p>Drop 1–5 photos here</p>
+        <p>Drag &amp; drop 1–5 photos here</p>
         <div class="drop-btns">
-          <label class="file-label">Choose files<input id="fileInput" type="file" accept="image/*" multiple hidden></label>
-          <button id="samplesBtn" type="button" class="ghost">Load samples</button>
+          <label class="file-label">Browse files<input id="fileInput" type="file" accept="image/*" multiple hidden></label>
+          <button id="samplesBtn" type="button" class="ghost">Use samples</button>
         </div>
       </div>
       <ul id="photoList" class="thumbs"></ul>
@@ -31,7 +34,7 @@
       <div id="presetRow" class="preset-row"></div>
     </section>
     <section>
-      <h2>3 · Layout</h2>
+      <h2>3 · Panel layout</h2>
       <div id="layoutRow" class="layout-row"></div>
     </section>
     <section>
@@ -44,11 +47,11 @@
     <section>
       <h2>5 · Caption</h2>
       <label>Title<input id="titleInput" type="text" maxlength="48" value="SUNSET HEIST"></label>
-      <label>Sub-caption<input id="subInput" type="text" maxlength="60" value="A VICE CITY STORY"></label>
+      <label>Subtitle<input id="subInput" type="text" maxlength="60" value="A VICE CITY STORY"></label>
       <div class="row">
-        <label>Position<select id="titlePos">
+        <label>Placement<select id="titlePos">
           <option value="top">Top</option>
-          <option value="center">Center</option>
+          <option value="center">Middle</option>
           <option value="bottom" selected>Bottom</option>
         </select></label>
         <label class="slider">Size <span id="titleSizeVal">100%</span>
@@ -67,8 +70,8 @@
       </div>
     </section>
     <section id="panelSection">
-      <h2>7 · Panel crop</h2>
-      <p id="panelHint" class="hint">Click a panel on the cover to crop it: drag to move, scroll to zoom. Faces stay whole.</p>
+      <h2>7 · Crop a panel</h2>
+      <p id="panelHint" class="hint">Click any panel on the cover to crop it — drag to reposition, scroll to zoom. Faces always stay whole.</p>
       <div id="panelControls" hidden>
         <p id="panelLabel" class="hint"></p>
         <label>Photo<select id="panelPhoto"></select></label>
@@ -82,10 +85,10 @@
     <div class="rail-track" id="railTrack" title="Drag to scroll the controls"><div class="rail-thumb" id="railThumb"></div></div>
     </div>
     <section class="export-section">
-      <h2>8 · Export</h2>
+      <h2>8 · Export PNG</h2>
       <div class="row"><span class="mini-label">Preview size</span><div id="sizeRow" class="size-row"></div></div>
       <div id="exportRow" class="export-row"></div>
-      <button id="exportAll" type="button" class="primary">Export all 3 PNGs</button>
+      <button id="exportAll" type="button" class="primary">Export all 3 sizes</button>
     </section>
   </aside>
   <section class="stage">

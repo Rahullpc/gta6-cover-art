@@ -1,10 +1,13 @@
-// state.js — the cover's shared state plus the four one-click concepts.
+// state.js — the shared cover state and the four one-click concepts.
 //
-// A concept takes a photo to a finished cover in two clicks: it loads samples
-// (only if the user has none), then sets layout, grade, caption, stickers and a
-// per-panel crop list. v2 crops are face-safe: hero/story panels use the framing
-// engine's head anchor, while detail panels aim at the car / street / sky with
-// `detail:true` so the face is fully out of frame rather than half-cut.
+// A concept is the two-click path from photo to finished cover: it loads the
+// sample photos (only when the user has none of their own), then sets layout,
+// grade, caption, stickers and a per-panel crop list in one shot.
+//
+// v2 crop philosophy: hero/story panels use the framing engine's head anchor
+// so the face stays whole; detail panels aim at the car / street / sky with
+// `detail: true`, putting the face fully OUT of frame instead of half-cut.
+// Every panel therefore shows either a complete face or pure scenery.
 
 import { defaultEdits, layoutById } from './layouts.js';
 import { clamp } from './framing.js';
@@ -22,15 +25,13 @@ export const sizeById = (id) => SIZES.find((s) => s.id === id) ?? SIZES[0];
 // The two sample photos shipped with the app (made for make.fun, free to use).
 export const SAMPLE_PHOTOS = ['boulevard', 'pier'];
 
-// Crop shorthand. `face` panels keep the whole head in frame (the framing engine
-// clamps zoom + pan to a face-safe range). `scene` panels aim at a car / sea /
-// boardwalk moment away from the head; the whole-or-absent guard guarantees the
-// face is never half-cut, so v2 shows either a whole face or pure scenery —
-// never a headless torso.
-const face = (photo, zoom = 1, panX = 0, panY = 0) => ({ photo, zoom, panX, panY });
-// A scenery moment (car / sea / boardwalk) aimed away from the head; the framing
-// guard keeps the face whole-or-absent, so these read as action, not portraits.
-const scene = (photo, zoom, aimX, aimY) => ({ photo, zoom, panX: 0, panY: 0, detail: true, aimX, aimY });
+// Crop shorthand for the concepts below.
+// `portrait` keeps the whole head in frame — the framing engine clamps zoom
+// and pan to the face-safe range around the head anchor.
+const portrait = (photo, zoom = 1, panX = 0, panY = 0) => ({ photo, zoom, panX, panY });
+// `moment` is a scenery beat (car / sea / boardwalk) aimed away from the head.
+// The whole-or-absent guard means these read as action, never as portraits.
+const moment = (photo, zoom, aimX, aimY) => ({ photo, zoom, panX: 0, panY: 0, detail: true, aimX, aimY });
 
 export const PRESETS = [
   {
@@ -47,14 +48,14 @@ export const PRESETS = [
     titleScale: 1,
     stickers: { viceCity: true, leonida: false, stars: true, palm: false },
     photos: ['boulevard', 'pier'],
-    // sunset-hero: hero, skyline, vignette (faces) + car / beach / street scenery.
+    // sunset-hero slots: hero, skyline, vignette (faces) + car/beach/street scenery.
     crops: [
-      face(0, 1.05),
-      face(1, 1.2, -0.3, 0),
-      face(0, 1.5, 0.45, 0.15),
-      scene(0, 3, 0.18, 0.9),
-      scene(1, 2.6, 0.9, 0.62),
-      scene(0, 2.8, 0.12, 0.35),
+      portrait(0, 1.05),
+      portrait(1, 1.2, -0.3, 0),
+      portrait(0, 1.5, 0.45, 0.15),
+      moment(0, 3, 0.18, 0.9),
+      moment(1, 2.6, 0.9, 0.62),
+      moment(0, 2.8, 0.12, 0.35),
     ],
   },
   {
@@ -71,14 +72,14 @@ export const PRESETS = [
     titleScale: 0.94,
     stickers: { viceCity: true, leonida: false, stars: true, palm: false },
     photos: ['boulevard', 'pier'],
-    // cinema: hero, skyline, vignette (faces) + car / beach / street scenery.
+    // cinema slots: hero, skyline, vignette (faces) + car/beach/street scenery.
     crops: [
-      face(0, 1.08),
-      face(1, 1.28, -0.25, 0),
-      face(1, 1.6, 0.4, 0.1),
-      scene(0, 3, 0.18, 0.9),
-      scene(1, 2.6, 0.9, 0.62),
-      scene(0, 2.8, 0.12, 0.35),
+      portrait(0, 1.08),
+      portrait(1, 1.28, -0.25, 0),
+      portrait(1, 1.6, 0.4, 0.1),
+      moment(0, 3, 0.18, 0.9),
+      moment(1, 2.6, 0.9, 0.62),
+      moment(0, 2.8, 0.12, 0.35),
     ],
   },
   {
@@ -95,14 +96,14 @@ export const PRESETS = [
     titleScale: 1.02,
     stickers: { viceCity: true, leonida: true, stars: false, palm: true },
     photos: ['boulevard'],
-    // five-vert: beach, car, hero, street, skyline — one photo, re-cropped,
-    // every moment keeps the whole face; zoom + pan give each its own framing.
+    // five-vert: beach, car, hero, street, skyline — one photo re-cropped five
+    // ways; every moment keeps the whole face, zoom + pan give each its own frame.
     crops: [
-      face(0, 1.2, -0.5, 0),
-      face(0, 1.5, 0.35, 0),
-      face(0, 1.02),
-      face(0, 1.4, -0.35, 0),
-      face(0, 1.3, 0.45, 0),
+      portrait(0, 1.2, -0.5, 0),
+      portrait(0, 1.5, 0.35, 0),
+      portrait(0, 1.02),
+      portrait(0, 1.4, -0.35, 0),
+      portrait(0, 1.3, 0.45, 0),
     ],
   },
   {
@@ -119,21 +120,21 @@ export const PRESETS = [
     titleScale: 1,
     stickers: { viceCity: false, leonida: true, stars: true, palm: false },
     photos: ['boulevard', 'pier'],
-    // quad: hero, skyline, vignette (faces) + street / car / beach scenery.
+    // quad slots: hero, skyline, vignette (faces) + street/car/beach scenery.
     crops: [
-      face(0, 1.05),
-      face(1, 1.24, -0.3, 0),
-      scene(0, 2.8, 0.12, 0.35),
-      scene(0, 3, 0.18, 0.9),
-      face(1, 1.6, 0.35, 0.1),
-      scene(1, 2.6, 0.9, 0.62),
+      portrait(0, 1.05),
+      portrait(1, 1.24, -0.3, 0),
+      moment(0, 2.8, 0.12, 0.35),
+      moment(0, 3, 0.18, 0.9),
+      portrait(1, 1.6, 0.35, 0.1),
+      moment(1, 2.6, 0.9, 0.62),
     ],
   },
 ];
 
 export const presetById = (id) => PRESETS.find((p) => p.id === id) ?? PRESETS[0];
 
-/** A blank cover ready for the default concept. */
+/** A blank cover, pre-set to the default concept's look. */
 export function createState() {
   return {
     size: 'landscape',
@@ -146,14 +147,14 @@ export function createState() {
     titleColor: 'white',
     titleScale: 1,
     stickers: { viceCity: true, leonida: false, stars: true, palm: false },
-    photos: [], // [{ img, name, focus? }]
+    photos: [], // entries: { img, name, focus? }
     cropsByLayout: {}, // layoutId -> [{ photo, zoom, panX, panY, detail?, aimX?, aimY? }]
     selectedPanel: -1,
     lastPreset: '',
   };
 }
 
-/** The crop list for the layout on screen now (created on first use). */
+/** The crop list for the layout currently on screen (lazily created). */
 export function activeEdits(state) {
   const layout = layoutById(state.layout);
   if (!state.cropsByLayout[state.layout]) {
@@ -162,7 +163,7 @@ export function activeEdits(state) {
   return state.cropsByLayout[state.layout];
 }
 
-/** Apply a concept, keeping the user's own photos when they have any. */
+/** Apply a concept. The user's own photos are kept when they have any. */
 export function applyPreset(state, preset) {
   state.layout = preset.layout;
   state.grade = preset.grade;

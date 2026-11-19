@@ -5,7 +5,8 @@
 //
 // v2: dragging inverts the face-safe framing engine (framing.js), so a drag can
 // recompose a panel but can never push a face out of frame. The control rail is
-// compact and uses a visible scrollbar so every section is reachable at 720px.
+// compact and uses a visible, draggable scrollbar so every section is reachable
+// at 720px, and selecting a panel scrolls its crop controls into view.
 
 import { LAYOUTS, layoutById } from './layouts.js';
 import { GRADES, gradeById } from './grades.js';
@@ -16,6 +17,10 @@ import { renderCover } from './cover.js';
 import { exportPNG, exportAll } from './export.js';
 
 const $ = (id) => document.getElementById(id);
+const STICKER_MAP = { stViceCity: 'viceCity', stLeonida: 'leonida', stStars: 'stars', stPalm: 'palm' };
+
+// Strip the samples/ prefix and extension for a friendly display name.
+const prettyName = (name) => name.replace(/^samples\//, '').replace(/\.[a-z]+$/i, '');
 
 /** Load an image element from a URL (sample path or object URL). */
 export function loadImage(url) {
@@ -35,16 +40,11 @@ export function initEditor(state) {
   let renderQueued = false;
   let drag = null;
 
-  /* ---------------------------------------------------------- rendering */
+  const setStatus = (msg) => {
+    $('status').textContent = msg;
+  };
 
-  function requestRender() {
-    if (renderQueued) return;
-    renderQueued = true;
-    requestAnimationFrame(() => {
-      renderQueued = false;
-      paintPreview();
-    });
-  }
+  /* ---------------------------------------------------------- rendering */
 
   function paintPreview() {
     const size = sizeById(state.size);
@@ -56,6 +56,7 @@ export function initEditor(state) {
     preview.height = Math.round(cssH * dpr);
     preview.style.width = `${cssW}px`;
     preview.style.height = `${cssH}px`;
+    // Render at full export resolution offscreen, then blit to fit the stage.
     const off = document.createElement('canvas');
     off.width = size.w;
     off.height = size.h;
@@ -72,44 +73,56 @@ export function initEditor(state) {
     $('stageInfo').textContent = `${size.w} × ${size.h} · ${layoutById(state.layout).name} · ${gradeById(state.grade).name}`;
   }
 
+  function requestRender() {
+    if (renderQueued) return;
+    renderQueued = true;
+    requestAnimationFrame(() => {
+      renderQueued = false;
+      paintPreview();
+    });
+  }
+
   new ResizeObserver(requestRender).observe(wrap);
 
   /* ------------------------- custom rail scrollbar (always visible, draggable) */
 
-  const scroller = $('railScroll');
-  const track = $('railTrack');
-  const thumb = $('railThumb');
-  function syncRailThumb() {
-    const max = scroller.scrollHeight - scroller.clientHeight;
-    if (max <= 2) {
-      track.style.display = 'none';
-      return;
-    }
-    track.style.display = '';
-    const th = Math.max(48, (scroller.clientHeight / scroller.scrollHeight) * track.clientHeight);
-    thumb.style.height = `${th}px`;
-    thumb.style.top = `${(scroller.scrollTop / max) * (track.clientHeight - th)}px`;
+  function setupRail() {
+    const scroller = $('railScroll');
+    const track = $('railTrack');
+    const thumb = $('railThumb');
+    const syncThumb = () => {
+      const max = scroller.scrollHeight - scroller.clientHeight;
+      if (max <= 2) {
+        track.style.display = 'none';
+        return;
+      }
+      track.style.display = '';
+      const th = Math.max(48, (scroller.clientHeight / scroller.scrollHeight) * track.clientHeight);
+      thumb.style.height = `${th}px`;
+      thumb.style.top = `${(scroller.scrollTop / max) * (track.clientHeight - th)}px`;
+    };
+    scroller.addEventListener('scroll', syncThumb);
+    new ResizeObserver(syncThumb).observe(scroller);
+    let thumbDrag = null;
+    thumb.addEventListener('pointerdown', (e) => {
+      thumbDrag = { y: e.clientY, top: scroller.scrollTop };
+      thumb.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    thumb.addEventListener('pointermove', (e) => {
+      if (!thumbDrag) return;
+      const max = scroller.scrollHeight - scroller.clientHeight;
+      const travel = Math.max(1, track.clientHeight - thumb.clientHeight);
+      scroller.scrollTop = thumbDrag.top + ((e.clientY - thumbDrag.y) / travel) * max;
+    });
+    const endThumbDrag = () => {
+      thumbDrag = null;
+    };
+    thumb.addEventListener('pointerup', endThumbDrag);
+    thumb.addEventListener('pointercancel', endThumbDrag);
+    syncThumb();
   }
-  scroller.addEventListener('scroll', syncRailThumb);
-  new ResizeObserver(syncRailThumb).observe(scroller);
-  let thumbDrag = null;
-  thumb.addEventListener('pointerdown', (e) => {
-    thumbDrag = { y: e.clientY, top: scroller.scrollTop };
-    thumb.setPointerCapture(e.pointerId);
-    e.preventDefault();
-  });
-  thumb.addEventListener('pointermove', (e) => {
-    if (!thumbDrag) return;
-    const max = scroller.scrollHeight - scroller.clientHeight;
-    const travel = Math.max(1, track.clientHeight - thumb.clientHeight);
-    scroller.scrollTop = thumbDrag.top + ((e.clientY - thumbDrag.y) / travel) * max;
-  });
-  const endThumbDrag = () => {
-    thumbDrag = null;
-  };
-  thumb.addEventListener('pointerup', endThumbDrag);
-  thumb.addEventListener('pointercancel', endThumbDrag);
-  syncRailThumb();
+  setupRail();
 
   /* ------------------------------------------------------------- photos */
 
@@ -147,6 +160,16 @@ export function initEditor(state) {
     await loadSamples(names);
   }
 
+  function removePhoto(i) {
+    state.photos.splice(i, 1);
+    for (const edits of Object.values(state.cropsByLayout)) {
+      for (const e of edits) e.photo = state.photos.length ? e.photo % state.photos.length : 0;
+    }
+    refreshPhotoList();
+    refreshPanelControls();
+    requestRender();
+  }
+
   function refreshPhotoList() {
     const ul = $('photoList');
     ul.textContent = '';
@@ -156,21 +179,13 @@ export function initEditor(state) {
       img.src = photo.img.src;
       img.alt = photo.name;
       const span = document.createElement('span');
-      span.textContent = photo.name.replace(/^samples\//, '').replace(/\.[a-z]+$/i, '');
+      span.textContent = prettyName(photo.name);
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'thumb-del';
       del.textContent = '×';
       del.title = 'Remove photo';
-      del.addEventListener('click', () => {
-        state.photos.splice(i, 1);
-        for (const edits of Object.values(state.cropsByLayout)) {
-          for (const e of edits) e.photo = state.photos.length ? e.photo % state.photos.length : 0;
-        }
-        refreshPhotoList();
-        refreshPanelControls();
-        requestRender();
-      });
+      del.addEventListener('click', () => removePhoto(i));
       li.append(img, span, del);
       ul.appendChild(li);
     });
@@ -178,25 +193,28 @@ export function initEditor(state) {
     refreshPanelControls();
   }
 
-  $('fileInput').addEventListener('change', (e) => {
-    addFiles(e.target.files);
-    e.target.value = '';
-  });
-  const dropZone = $('dropZone');
-  ['dragenter', 'dragover'].forEach((ev) =>
-    dropZone.addEventListener(ev, (e) => {
-      e.preventDefault();
-      dropZone.classList.add('over');
-    }),
-  );
-  ['dragleave', 'drop'].forEach((ev) =>
-    dropZone.addEventListener(ev, (e) => {
-      e.preventDefault();
-      dropZone.classList.remove('over');
-    }),
-  );
-  dropZone.addEventListener('drop', (e) => addFiles(e.dataTransfer.files));
-  $('samplesBtn').addEventListener('click', () => loadSamples());
+  function setupPhotos() {
+    $('fileInput').addEventListener('change', (e) => {
+      addFiles(e.target.files);
+      e.target.value = '';
+    });
+    const dropZone = $('dropZone');
+    ['dragenter', 'dragover'].forEach((ev) =>
+      dropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        dropZone.classList.add('over');
+      }),
+    );
+    ['dragleave', 'drop'].forEach((ev) =>
+      dropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('over');
+      }),
+    );
+    dropZone.addEventListener('drop', (e) => addFiles(e.dataTransfer.files));
+    $('samplesBtn').addEventListener('click', () => loadSamples());
+  }
+  setupPhotos();
 
   /* ------------------------------------------------------------ presets */
 
@@ -219,13 +237,8 @@ export function initEditor(state) {
 
   /* ------------------------------------------------------------ layouts */
 
-  const layoutRow = $('layoutRow');
-  for (const layout of LAYOUTS) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'layout-btn';
-    btn.dataset.layout = layout.id;
-    btn.title = layout.blurb;
+  // A tiny gradient thumbnail with the layout's panel outlines inked on top.
+  function layoutThumb(layout) {
     const thumb = document.createElement('canvas');
     thumb.width = 56;
     thumb.height = 38;
@@ -238,9 +251,19 @@ export function initEditor(state) {
     c.strokeStyle = '#0D001A';
     c.lineWidth = 2;
     for (const p of layout.panels(56, 38)) c.strokeRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
+    return thumb;
+  }
+
+  const layoutRow = $('layoutRow');
+  for (const layout of LAYOUTS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'layout-btn';
+    btn.dataset.layout = layout.id;
+    btn.title = layout.blurb;
     const label = document.createElement('span');
     label.textContent = layout.name;
-    btn.append(thumb, label);
+    btn.append(layoutThumb(layout), label);
     btn.addEventListener('click', () => {
       state.layout = layout.id;
       state.selectedPanel = -1;
@@ -314,8 +337,7 @@ export function initEditor(state) {
 
   /* ----------------------------------------------------------- stickers */
 
-  const stickerMap = { stViceCity: 'viceCity', stLeonida: 'leonida', stStars: 'stars', stPalm: 'palm' };
-  for (const [id, key] of Object.entries(stickerMap)) {
+  for (const [id, key] of Object.entries(STICKER_MAP)) {
     $(id).addEventListener('change', (e) => {
       state.stickers[key] = e.target.checked;
       requestRender();
@@ -324,10 +346,7 @@ export function initEditor(state) {
 
   /* -------------------------------------------------------- panel edits */
 
-  function panelRects() {
-    const size = sizeById(state.size);
-    return layoutById(state.layout).panels(size.w, size.h);
-  }
+  const panelRects = () => layoutById(state.layout).panels(sizeById(state.size).w, sizeById(state.size).h);
 
   function refreshPanelControls() {
     const sel = state.selectedPanel;
@@ -346,7 +365,7 @@ export function initEditor(state) {
     state.photos.forEach((photo, i) => {
       const opt = document.createElement('option');
       opt.value = String(i);
-      opt.textContent = `${i + 1} · ${photo.name.replace(/^samples\//, '').replace(/\.[a-z]+$/i, '')}`;
+      opt.textContent = `${i + 1} · ${prettyName(photo.name)}`;
       photoSel.appendChild(opt);
     });
     const edit = activeEdits(state)[sel];
@@ -386,6 +405,7 @@ export function initEditor(state) {
 
   /* ------------------------------------------- pointer: select + drag */
 
+  // Map a pointer event to cover coordinates (accounting for the fit blit).
   function coverPoint(e) {
     const rect = preview.getBoundingClientRect();
     const size = sizeById(state.size);
@@ -394,9 +414,8 @@ export function initEditor(state) {
     return { x, y, inside: x >= 0 && y >= 0 && x <= size.w && y <= size.h };
   }
 
-  function hitPanel(pt) {
-    return panelRects().findIndex((p) => pt.x >= p.x && pt.x <= p.x + p.w && pt.y >= p.y && pt.y <= p.y + p.h);
-  }
+  const hitPanel = (pt) =>
+    panelRects().findIndex((p) => pt.x >= p.x && pt.x <= p.x + p.w && pt.y >= p.y && pt.y <= p.y + p.h);
 
   function frameFor(idx) {
     const p = panelRects()[idx];
@@ -482,10 +501,6 @@ export function initEditor(state) {
     exportRow.appendChild(btn);
   }
 
-  function setStatus(msg) {
-    $('status').textContent = msg;
-  }
-
   $('exportAll').addEventListener('click', async () => {
     setStatus('Exporting all three sizes…');
     const names = await exportAll(state, (name) => setStatus(`Saved ${name}`));
@@ -502,7 +517,7 @@ export function initEditor(state) {
     $('titleSizeVal').textContent = `${Math.round(state.titleScale * 100)}%`;
     $('gradeIntensity').value = String(Math.round(state.intensity * 100));
     $('gradeIntensityVal').textContent = `${Math.round(state.intensity * 100)}%`;
-    for (const [id, key] of Object.entries(stickerMap)) $(id).checked = state.stickers[key];
+    for (const [id, key] of Object.entries(STICKER_MAP)) $(id).checked = state.stickers[key];
     for (const btn of presetRow.children) btn.classList.toggle('active', btn.dataset.preset === state.lastPreset);
     for (const btn of layoutRow.children) btn.classList.toggle('active', btn.dataset.layout === state.layout);
     for (const btn of gradeRow.children) btn.classList.toggle('active', btn.dataset.grade === state.grade);

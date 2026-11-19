@@ -1,8 +1,10 @@
-/* Vice Cover Studio v2 — dark studio theme, compact rail, legible at 1280x720.
-   v2 fixes the rail: a clearly visible, draggable scrollbar (v1 hid it behind a
-   subtle custom thumb), tighter section spacing, and the crop section scrolls
-   itself into view when a panel is selected, so sections 4-7 are easy to reach. */
+/* Vice Cover Studio v2 — dark studio theme.
+   The control rail is compact and stays legible at 1280x720. v2's rail fix: a
+   bright, always-visible, draggable scroll thumb (native overlay scrollbars
+   disappear in headless shots), tighter section spacing, and the crop section
+   auto-scrolls into view when a panel is picked, so sections 4-7 are reachable. */
 
+/* Bundled OFL display face — loaded from app/fonts, never from the network. */
 @font-face {
   font-family: 'Vice Display';
   src: url('./fonts/NotoSans-CondensedBlack.ttf') format('truetype');
@@ -33,6 +35,7 @@ body {
   overflow: hidden;
 }
 
+/* Top brand bar. */
 .topbar {
   display: flex;
   align-items: baseline;
@@ -56,8 +59,7 @@ body {
 
 .app { flex: 1; display: flex; min-height: 0; }
 
-/* ------------------------------------------------------------- left rail */
-
+/* Left control rail: a scrollable column of sections plus a pinned export box. */
 .rail {
   width: 326px;
   flex: none;
@@ -81,8 +83,8 @@ body {
   scrollbar-width: none;
 }
 .rail-scroll::-webkit-scrollbar { display: none; }
-/* A custom, always-visible scroll thumb (native overlay scrollbars vanish in
-   headless screenshots). Bright pink-orange on a dark track, draggable. */
+/* Custom scroll track + thumb: high-contrast so it reads in screenshots, and
+   draggable so every section is reachable even on a short 720px viewport. */
 .rail-track {
   position: absolute;
   top: 0;
@@ -124,6 +126,7 @@ body {
 .hint { margin: 3px 0; color: var(--muted); font-size: 11.5px; }
 .mini-label { color: var(--muted); font-size: 12px; align-self: center; }
 
+/* Form controls. */
 label { display: flex; flex-direction: column; gap: 3px; font-weight: 600; margin-bottom: 5px; font-size: 12px; }
 input[type=text], select {
   font: inherit;
@@ -163,7 +166,7 @@ button.primary {
   border: 0;
 }
 
-/* photos */
+/* Photo drop zone + thumbnail chips. */
 .drop {
   border: 1.5px dashed var(--line);
   border-radius: 8px;
@@ -192,7 +195,7 @@ button.primary {
 .thumbs span { max-width: 62px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
 .thumb-del { padding: 0 5px; font-size: 13px; line-height: 1; }
 
-/* presets / layouts / grades */
+/* Concept / layout / grade pickers. */
 .preset-row { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .preset-btn { font-size: 11.5px; padding: 6px 5px; }
 .layout-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
@@ -205,20 +208,19 @@ button.primary {
 .color-btn { width: 22px; height: 22px; border-radius: 50%; padding: 0; border: 2px solid var(--line); }
 .color-btn.active { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0, 229, 255, 0.6); }
 
-/* stickers */
+/* Sticker toggles. */
 .checks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px 4px; }
 .checks label { flex-direction: row; align-items: center; gap: 4px; margin: 0; font-weight: 600; font-size: 10.5px; }
 .checks input { accent-color: var(--pink); }
 
-/* export */
+/* Pinned export box. */
 .export-section { flex: none; background: var(--rail); border-top: 1px solid var(--line); padding: 6px 10px 10px 0; margin-right: 2px; }
 .size-row { display: flex; gap: 5px; }
 .size-btn { font-size: 11px; padding: 4px 6px; }
 .export-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 6px; }
 .export-btn { font-size: 10.5px; padding: 6px 3px; border-color: #4a1f7a; }
 
-/* ----------------------------------------------------------------- stage */
-
+/* Right-hand preview stage. */
 .stage { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .canvas-wrap { flex: 1; position: relative; min-height: 0; background: #0B0512; }
 .canvas-wrap canvas { display: block; position: absolute; inset: 0; cursor: crosshair; }
@@ -236,8 +238,7 @@ button.primary {
 }
 #status { color: var(--gold); text-align: right; }
 
-/* ------------------------------------------------------- screenshot mode */
-
+/* Screenshot mode: hide the chrome so the exported cover fills the frame. */
 body.shot-cover .topbar,
 body.shot-cover .rail,
 body.shot-cover .stage-bar { display: none; }

@@ -1,15 +1,13 @@
-// export.js — PNG export. Render the cover at a post size on a fresh canvas and
-// download it. The same renderCover() call paints the live preview, so the
+// export.js — PNG export. Render the cover at a post size on a fresh canvas
+// and download it. The same renderCover() call paints the live preview, so the
 // exported file matches what the editor shows, pixel for pixel.
 
 import { renderToCanvas } from './cover.js';
 import { SIZES, sizeById } from './state.js';
 
-/** Render + download one PNG. Resolves with the filename once saved. */
-export function exportPNG(state, sizeId) {
-  const size = sizeById(sizeId);
-  const canvas = renderToCanvas(state, sizeId);
-  const name = `vice-cover-${size.w}x${size.h}.png`;
+// Encode the canvas as a PNG blob, then trigger a download via a temporary
+// object-URL anchor. Resolves with the filename once the click has fired.
+function saveBlob(canvas, name) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) {
@@ -17,16 +15,23 @@ export function exportPNG(state, sizeId) {
         return;
       }
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
       resolve(name);
     }, 'image/png');
   });
+}
+
+/** Render + download one PNG. Resolves with the filename once saved. */
+export function exportPNG(state, sizeId) {
+  const size = sizeById(sizeId);
+  const canvas = renderToCanvas(state, sizeId);
+  return saveBlob(canvas, `vice-cover-${size.w}x${size.h}.png`);
 }
 
 /** Download all three post sizes, one after another. */

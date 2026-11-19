@@ -1,15 +1,23 @@
 // decor.js — the poster's vector art, all Canvas 2D and fully deterministic.
 //
-// A seeded PRNG drives every scatter (stars, birds, windows, money) so the live
-// preview and the exported PNG are pixel-identical. Each panel gets action:
-// striped synthwave sun, palms, neon skyline, a sport car with tire smoke, a
-// beach jetski, neon street signs with a crowd, helicopter / money / police /
-// duffel vignettes, a tiny plane in the sky, halftone dots, film grain, crisp
-// comic borders and sticker badges. v2 borders are straight and uniform (neat,
-// not jittered) and hero decor is pinned to corners so it never covers a face.
+// A seeded PRNG drives every scatter (stars, birds, windows, money, crowds) so
+// the live preview and the exported PNG are pixel-identical. Each panel gets
+// action: striped synthwave sun, palms, neon skyline, a sport car with tire
+// smoke, a beach jetski, neon street signs with a crowd, helicopter / money /
+// police / duffel vignettes, a tiny plane in the sky, halftone dots, film
+// grain, crisp comic borders and sticker badges.
+//
+// v2: borders are straight and uniform (neat, not jittered) and hero decor is
+// pinned to corners / the lower half so it never covers a face, which the
+// framing engine seats in the upper third.
+//
+// Implementation note: the primitives below (disc / ring / box / seg / trace)
+// are a tiny drawing vocabulary shared by every scene. They keep the geometry
+// identical while letting each scene read as a short composition of shapes.
 
 const INK = '#0D001A';
 const DISPLAY = '"Vice Display", "Arial Black", sans-serif';
+const TAU = Math.PI * 2;
 
 /** mulberry32 PRNG: same seed, same poster, every render. */
 export function rng(seed) {
@@ -21,6 +29,39 @@ export function rng(seed) {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/* ------------------------------------------------- drawing vocabulary */
+
+// Filled circle.
+function disc(c, x, y, r) {
+  c.beginPath();
+  c.arc(x, y, r, 0, TAU);
+  c.fill();
+}
+// Stroked circle (uses current strokeStyle / lineWidth).
+function ring(c, x, y, r) {
+  c.beginPath();
+  c.arc(x, y, r, 0, TAU);
+  c.stroke();
+}
+// Filled rectangle.
+function box(c, x, y, w, h) {
+  c.fillRect(x, y, w, h);
+}
+// Single stroked segment.
+function seg(c, x1, y1, x2, y2) {
+  c.beginPath();
+  c.moveTo(x1, y1);
+  c.lineTo(x2, y2);
+  c.stroke();
+}
+// Build a path from a callback, then fill it.
+function trace(c, build) {
+  c.beginPath();
+  build(c);
+  c.closePath();
+  c.fill();
 }
 
 /* ------------------------------------------------------------------- sun */
@@ -39,13 +80,12 @@ export function drawSun(ctx, cx, cy, r, alpha = 0.92) {
   glow.addColorStop(0.55, '#FF9E00');
   glow.addColorStop(1, '#FF2E88');
   c.fillStyle = glow;
-  c.beginPath();
-  c.arc(mid, mid, r, 0, Math.PI * 2);
-  c.fill();
+  disc(c, mid, mid, r);
+  // Cut the retro horizontal slits out of the lower half.
   c.globalCompositeOperation = 'destination-out';
   for (let i = 0; i < 7; i++) {
-    const y = mid + r * (0.04 + i * 0.14);
-    c.fillRect(0, y, size, r * (0.03 + i * 0.022));
+    const slitY = mid + r * (0.04 + i * 0.14);
+    box(c, 0, slitY, size, r * (0.03 + i * 0.022));
   }
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -64,22 +104,15 @@ export function drawMoon(ctx, cx, cy, r) {
   halo.addColorStop(0, 'rgba(0,229,255,0.3)');
   halo.addColorStop(1, 'rgba(0,229,255,0)');
   ctx.fillStyle = halo;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * 2.4, 0, Math.PI * 2);
-  ctx.fill();
+  disc(ctx, cx, cy, r * 2.4);
   const face = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.1, cx, cy, r);
   face.addColorStop(0, '#F4FBFF');
   face.addColorStop(1, '#9FD8E8');
   ctx.fillStyle = face;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fill();
+  disc(ctx, cx, cy, r);
   ctx.fillStyle = 'rgba(13,0,26,0.14)';
-  for (const [dx, dy, dr] of [[-0.3, 0.1, 0.18], [0.25, -0.25, 0.12], [0.15, 0.35, 0.1]]) {
-    ctx.beginPath();
-    ctx.arc(cx + dx * r, cy + dy * r, dr * r, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  const craters = [[-0.3, 0.1, 0.18], [0.25, -0.25, 0.12], [0.15, 0.35, 0.1]];
+  for (const [dx, dy, dr] of craters) disc(ctx, cx + dx * r, cy + dy * r, dr * r);
   ctx.restore();
 }
 
@@ -93,13 +126,13 @@ export function drawStars(ctx, x, y, w, h, n, seed) {
     const py = y + rnd() * h;
     const r = Math.min(w, h) * (0.006 + rnd() * 0.008);
     ctx.globalAlpha = 0.5 + rnd() * 0.5;
-    ctx.beginPath();
-    ctx.moveTo(px, py - r * 2);
-    ctx.quadraticCurveTo(px, py, px + r * 2, py);
-    ctx.quadraticCurveTo(px, py, px, py + r * 2);
-    ctx.quadraticCurveTo(px, py, px - r * 2, py);
-    ctx.quadraticCurveTo(px, py, px, py - r * 2);
-    ctx.fill();
+    trace(ctx, (c) => {
+      c.moveTo(px, py - r * 2);
+      c.quadraticCurveTo(px, py, px + r * 2, py);
+      c.quadraticCurveTo(px, py, px, py + r * 2);
+      c.quadraticCurveTo(px, py, px - r * 2, py);
+      c.quadraticCurveTo(px, py, px, py - r * 2);
+    });
   }
   ctx.restore();
 }
@@ -114,13 +147,12 @@ export function drawPalm(ctx, baseX, baseY, height, lean, color = INK) {
   ctx.fillStyle = color;
   const w0 = height * 0.048;
   const w1 = height * 0.02;
-  ctx.beginPath();
-  ctx.moveTo(baseX - w0, baseY);
-  ctx.bezierCurveTo(baseX - w0 + lean * height * 0.35, baseY - height * 0.55, topX - w1 - lean * height * 0.12, topY + height * 0.22, topX - w1, topY);
-  ctx.lineTo(topX + w1, topY);
-  ctx.bezierCurveTo(topX + w1 - lean * height * 0.12, topY + height * 0.22, baseX + w0 + lean * height * 0.35, baseY - height * 0.55, baseX + w0, baseY);
-  ctx.closePath();
-  ctx.fill();
+  trace(ctx, (c) => {
+    c.moveTo(baseX - w0, baseY);
+    c.bezierCurveTo(baseX - w0 + lean * height * 0.35, baseY - height * 0.55, topX - w1 - lean * height * 0.12, topY + height * 0.22, topX - w1, topY);
+    c.lineTo(topX + w1, topY);
+    c.bezierCurveTo(topX + w1 - lean * height * 0.12, topY + height * 0.22, baseX + w0 + lean * height * 0.35, baseY - height * 0.55, baseX + w0, baseY);
+  });
   const fronds = 9;
   for (let i = 0; i < fronds; i++) {
     const t = i / (fronds - 1);
@@ -131,16 +163,15 @@ export function drawPalm(ctx, baseX, baseY, height, lean, color = INK) {
     const midX = topX + Math.cos(ang) * len * 0.5;
     const midY = topY + Math.sin(ang) * len * 0.35 - len * 0.1;
     const fat = len * 0.13;
-    ctx.beginPath();
-    ctx.moveTo(topX, topY);
-    ctx.quadraticCurveTo(midX, midY - fat, tipX, tipY);
-    ctx.quadraticCurveTo(midX, midY + fat * 0.55, topX, topY);
-    ctx.closePath();
-    ctx.fill();
+    trace(ctx, (c) => {
+      c.moveTo(topX, topY);
+      c.quadraticCurveTo(midX, midY - fat, tipX, tipY);
+      c.quadraticCurveTo(midX, midY + fat * 0.55, topX, topY);
+    });
   }
   ctx.beginPath();
-  ctx.arc(topX - height * 0.03, topY + height * 0.04, height * 0.026, 0, Math.PI * 2);
-  ctx.arc(topX + height * 0.032, topY + height * 0.052, height * 0.022, 0, Math.PI * 2);
+  ctx.arc(topX - height * 0.03, topY + height * 0.04, height * 0.026, 0, TAU);
+  ctx.arc(topX + height * 0.032, topY + height * 0.052, height * 0.022, 0, TAU);
   ctx.fill();
   ctx.restore();
 }
@@ -176,20 +207,18 @@ export function drawPlane(ctx, cx, cy, s, tilt = -0.08) {
   ctx.fillStyle = INK;
   ctx.globalAlpha = 0.8;
   ctx.beginPath();
-  ctx.ellipse(0, 0, s * 0.5, s * 0.12, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 0, s * 0.5, s * 0.12, 0, 0, TAU);
   ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(-s * 0.05, 0);
-  ctx.lineTo(-s * 0.28, -s * 0.34);
-  ctx.lineTo(-s * 0.12, 0);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(-s * 0.42, 0);
-  ctx.lineTo(-s * 0.56, -s * 0.2);
-  ctx.lineTo(-s * 0.46, 0);
-  ctx.closePath();
-  ctx.fill();
+  trace(ctx, (c) => {
+    c.moveTo(-s * 0.05, 0);
+    c.lineTo(-s * 0.28, -s * 0.34);
+    c.lineTo(-s * 0.12, 0);
+  });
+  trace(ctx, (c) => {
+    c.moveTo(-s * 0.42, 0);
+    c.lineTo(-s * 0.56, -s * 0.2);
+    c.lineTo(-s * 0.46, 0);
+  });
   ctx.restore();
 }
 
@@ -206,40 +235,35 @@ export function drawSkyline(ctx, x, y, w, h, seed) {
     const bh = Math.min(h * (0.25 + rnd() * 0.55), bw * 5);
     const neon = rnd() > 0.5 ? '#FF2E88' : '#00E5FF';
     ctx.fillStyle = INK;
-    ctx.fillRect(bx, baseY - bh, bw, bh);
+    box(ctx, bx, baseY - bh, bw, bh);
+    // Glowing roofline.
     ctx.save();
     ctx.strokeStyle = neon;
     ctx.globalAlpha = 0.9;
     ctx.lineWidth = Math.max(1.5, h * 0.012);
     ctx.shadowColor = neon;
     ctx.shadowBlur = h * 0.04;
-    ctx.beginPath();
-    ctx.moveTo(bx, baseY - bh);
-    ctx.lineTo(bx + bw, baseY - bh);
-    ctx.stroke();
+    seg(ctx, bx, baseY - bh, bx + bw, baseY - bh);
     ctx.restore();
+    // Lit windows on a loose grid.
     const step = Math.max(4, h * 0.035);
     ctx.fillStyle = neon;
     for (let wy = baseY - bh + step; wy < baseY - step * 0.5; wy += step) {
       for (let wx = bx + step * 0.6; wx < bx + bw - step * 0.4; wx += step) {
         if (rnd() < 0.4) {
           ctx.globalAlpha = 0.45 + rnd() * 0.45;
-          ctx.fillRect(wx, wy, step * 0.32, step * 0.32);
+          box(ctx, wx, wy, step * 0.32, step * 0.32);
         }
       }
     }
     ctx.globalAlpha = 1;
+    // Occasional antenna mast with a gold beacon.
     if (rnd() < 0.28) {
       ctx.strokeStyle = '#FF6EC7';
       ctx.lineWidth = Math.max(1, h * 0.008);
-      ctx.beginPath();
-      ctx.moveTo(bx + bw * 0.5, baseY - bh);
-      ctx.lineTo(bx + bw * 0.5, baseY - bh - h * 0.12);
-      ctx.stroke();
+      seg(ctx, bx + bw * 0.5, baseY - bh, bx + bw * 0.5, baseY - bh - h * 0.12);
       ctx.fillStyle = '#FFD60A';
-      ctx.beginPath();
-      ctx.arc(bx + bw * 0.5, baseY - bh - h * 0.12, Math.max(1.5, h * 0.012), 0, Math.PI * 2);
-      ctx.fill();
+      disc(ctx, bx + bw * 0.5, baseY - bh - h * 0.12, Math.max(1.5, h * 0.012));
     }
     bx += bw + w * 0.008;
   }
@@ -248,8 +272,8 @@ export function drawSkyline(ctx, x, y, w, h, seed) {
 
 /* ------------------------------------------------------------------- car */
 
-/** Low sport car facing right, tilted, with underglow, tire smoke, speed lines,
- *  neon rims and a tiny yellow plate. Box: W wide, W*0.3 tall. */
+/** Low sport car facing right, tilted, with underglow, tire smoke, speed
+ *  lines, neon rims and a tiny yellow plate. Box: W wide, W*0.3 tall. */
 export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
   const H = W * 0.3;
   ctx.save();
@@ -257,27 +281,23 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
   ctx.rotate(tilt);
   ctx.translate(-W / 2, -H / 2);
 
+  // Tire smoke drifting off the rear.
   const rnd = rng(4242);
   for (let i = 0; i < 5; i++) {
     const px = -W * (0.02 + i * 0.045);
     const py = H * (0.62 - i * 0.05) + rnd() * H * 0.06;
     const pr = W * (0.045 + i * 0.02);
     ctx.fillStyle = i % 2 ? 'rgba(255,110,199,0.16)' : 'rgba(210,200,220,0.18)';
-    ctx.beginPath();
-    ctx.arc(px, py, pr, 0, Math.PI * 2);
-    ctx.fill();
+    disc(ctx, px, py, pr);
   }
+  // Speed lines behind the car.
   ctx.strokeStyle = accent;
   ctx.globalAlpha = 0.4;
   ctx.lineWidth = Math.max(1.5, W * 0.006);
-  for (const ly of [0.3, 0.46, 0.6]) {
-    ctx.beginPath();
-    ctx.moveTo(-W * 0.24, H * ly);
-    ctx.lineTo(-W * 0.02, H * ly);
-    ctx.stroke();
-  }
+  for (const ly of [0.3, 0.46, 0.6]) seg(ctx, -W * 0.24, H * ly, -W * 0.02, H * ly);
   ctx.globalAlpha = 1;
 
+  // Neon underglow pooled on the ground.
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
   const glow = ctx.createRadialGradient(W * 0.5, H * 0.9, W * 0.02, W * 0.5, H * 0.9, W * 0.55);
@@ -285,11 +305,10 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
   glow.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = glow;
   ctx.scale(1, 0.26);
-  ctx.beginPath();
-  ctx.arc(W * 0.5, H * 0.9 / 0.26, W * 0.55, 0, Math.PI * 2);
-  ctx.fill();
+  disc(ctx, W * 0.5, H * 0.9 / 0.26, W * 0.55);
   ctx.restore();
 
+  // Body silhouette with wheel arches cut into the bottom line.
   const body = new Path2D();
   body.moveTo(W * 0.02, H * 0.6);
   body.lineTo(W * 0.035, H * 0.4);
@@ -309,6 +328,7 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
   ctx.fillStyle = INK;
   ctx.fill(body);
 
+  // Magenta neon tracing the roofline.
   ctx.save();
   ctx.strokeStyle = '#FF2E88';
   ctx.globalAlpha = 0.85;
@@ -324,49 +344,46 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
   ctx.stroke();
   ctx.restore();
 
+  // Cyan glasshouse.
   ctx.fillStyle = 'rgba(0,229,255,0.3)';
-  ctx.beginPath();
-  ctx.moveTo(W * 0.3, H * 0.24);
-  ctx.quadraticCurveTo(W * 0.37, H * 0.13, W * 0.46, H * 0.13);
-  ctx.quadraticCurveTo(W * 0.54, H * 0.14, W * 0.59, H * 0.25);
-  ctx.closePath();
-  ctx.fill();
+  trace(ctx, (c) => {
+    c.moveTo(W * 0.3, H * 0.24);
+    c.quadraticCurveTo(W * 0.37, H * 0.13, W * 0.46, H * 0.13);
+    c.quadraticCurveTo(W * 0.54, H * 0.14, W * 0.59, H * 0.25);
+  });
 
+  // Wheels with neon rims.
   for (const wx of [W * 0.22, W * 0.78]) {
     ctx.fillStyle = '#050308';
-    ctx.beginPath();
-    ctx.arc(wx, H * 0.65, W * 0.105, 0, Math.PI * 2);
-    ctx.fill();
+    disc(ctx, wx, H * 0.65, W * 0.105);
     ctx.strokeStyle = accent;
     ctx.globalAlpha = 0.9;
     ctx.lineWidth = Math.max(1.2, W * 0.006);
-    ctx.beginPath();
-    ctx.arc(wx, H * 0.65, W * 0.06, 0, Math.PI * 2);
-    ctx.stroke();
+    ring(ctx, wx, H * 0.65, W * 0.06);
     ctx.globalAlpha = 1;
   }
 
+  // Headlight + beam.
   ctx.fillStyle = '#FFD60A';
-  ctx.beginPath();
-  ctx.moveTo(W * 0.955, H * 0.43);
-  ctx.lineTo(W * 0.99, H * 0.46);
-  ctx.lineTo(W * 0.955, H * 0.49);
-  ctx.closePath();
-  ctx.fill();
+  trace(ctx, (c) => {
+    c.moveTo(W * 0.955, H * 0.43);
+    c.lineTo(W * 0.99, H * 0.46);
+    c.lineTo(W * 0.955, H * 0.49);
+  });
   const beam = ctx.createLinearGradient(W * 0.99, 0, W * 1.3, 0);
   beam.addColorStop(0, 'rgba(255,214,10,0.3)');
   beam.addColorStop(1, 'rgba(255,214,10,0)');
   ctx.fillStyle = beam;
-  ctx.beginPath();
-  ctx.moveTo(W * 0.99, H * 0.44);
-  ctx.lineTo(W * 1.3, H * 0.3);
-  ctx.lineTo(W * 1.3, H * 0.62);
-  ctx.lineTo(W * 0.99, H * 0.5);
-  ctx.closePath();
-  ctx.fill();
+  trace(ctx, (c) => {
+    c.moveTo(W * 0.99, H * 0.44);
+    c.lineTo(W * 1.3, H * 0.3);
+    c.lineTo(W * 1.3, H * 0.62);
+    c.lineTo(W * 0.99, H * 0.5);
+  });
 
+  // Tiny yellow plate up front.
   ctx.fillStyle = '#FFD60A';
-  ctx.fillRect(W * 0.025, H * 0.48, W * 0.09, H * 0.12);
+  box(ctx, W * 0.025, H * 0.48, W * 0.09, H * 0.12);
   ctx.strokeStyle = INK;
   ctx.lineWidth = Math.max(1, W * 0.003);
   ctx.strokeRect(W * 0.025, H * 0.48, W * 0.09, H * 0.12);
@@ -384,27 +401,28 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
 export function drawHelicopter(ctx, cx, cy, s) {
   ctx.save();
   ctx.translate(cx, cy);
+  // Searchlight cone sweeping down.
   const cone = ctx.createLinearGradient(0, s * 0.1, 0, s * 1.5);
   cone.addColorStop(0, 'rgba(255,214,10,0.3)');
   cone.addColorStop(1, 'rgba(255,214,10,0)');
   ctx.fillStyle = cone;
-  ctx.beginPath();
-  ctx.moveTo(s * 0.08, s * 0.1);
-  ctx.lineTo(-s * 0.4, s * 1.5);
-  ctx.lineTo(s * 0.6, s * 1.5);
-  ctx.closePath();
-  ctx.fill();
+  trace(ctx, (c) => {
+    c.moveTo(s * 0.08, s * 0.1);
+    c.lineTo(-s * 0.4, s * 1.5);
+    c.lineTo(s * 0.6, s * 1.5);
+  });
+  // Tail boom + fin.
   ctx.fillStyle = INK;
+  trace(ctx, (c) => {
+    c.moveTo(-s * 0.25, -s * 0.04);
+    c.lineTo(-s * 0.62, -s * 0.1);
+    c.lineTo(-s * 0.62, -s * 0.02);
+    c.lineTo(-s * 0.25, s * 0.06);
+  });
+  box(ctx, -s * 0.66, -s * 0.2, s * 0.05, s * 0.16);
+  // Cabin.
   ctx.beginPath();
-  ctx.moveTo(-s * 0.25, -s * 0.04);
-  ctx.lineTo(-s * 0.62, -s * 0.1);
-  ctx.lineTo(-s * 0.62, -s * 0.02);
-  ctx.lineTo(-s * 0.25, s * 0.06);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillRect(-s * 0.66, -s * 0.2, s * 0.05, s * 0.16);
-  ctx.beginPath();
-  ctx.ellipse(0, 0, s * 0.32, s * 0.14, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 0, s * 0.32, s * 0.14, 0, 0, TAU);
   ctx.fill();
   ctx.save();
   ctx.strokeStyle = '#FF2E88';
@@ -413,27 +431,23 @@ export function drawHelicopter(ctx, cx, cy, s) {
   ctx.shadowColor = '#FF2E88';
   ctx.shadowBlur = s * 0.06;
   ctx.beginPath();
-  ctx.ellipse(0, -s * 0.02, s * 0.3, s * 0.12, 0, Math.PI, Math.PI * 2);
+  ctx.ellipse(0, -s * 0.02, s * 0.3, s * 0.12, 0, Math.PI, TAU);
   ctx.stroke();
   ctx.restore();
   ctx.fillStyle = 'rgba(0,229,255,0.4)';
   ctx.beginPath();
-  ctx.ellipse(s * 0.18, -s * 0.02, s * 0.1, s * 0.08, 0, 0, Math.PI * 2);
+  ctx.ellipse(s * 0.18, -s * 0.02, s * 0.1, s * 0.08, 0, 0, TAU);
   ctx.fill();
+  // Rotor disc + mast.
   ctx.fillStyle = 'rgba(13,0,26,0.25)';
   ctx.beginPath();
-  ctx.ellipse(0, -s * 0.22, s * 0.52, s * 0.035, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, -s * 0.22, s * 0.52, s * 0.035, 0, 0, TAU);
   ctx.fill();
   ctx.strokeStyle = INK;
   ctx.lineWidth = Math.max(2, s * 0.03);
-  ctx.beginPath();
-  ctx.moveTo(-s * 0.5, -s * 0.22);
-  ctx.lineTo(s * 0.5, -s * 0.22);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(0, -s * 0.14);
-  ctx.lineTo(0, -s * 0.22);
-  ctx.stroke();
+  seg(ctx, -s * 0.5, -s * 0.22, s * 0.5, -s * 0.22);
+  seg(ctx, 0, -s * 0.14, 0, -s * 0.22);
+  // Landing skids.
   ctx.lineWidth = Math.max(1.5, s * 0.02);
   ctx.beginPath();
   ctx.moveTo(-s * 0.22, s * 0.18);
@@ -461,13 +475,11 @@ export function drawMoney(ctx, x, y, w, h, n, seed) {
     ctx.translate(px + bw / 2, py + bh / 2);
     ctx.rotate((rnd() - 0.5) * 1.1);
     ctx.fillStyle = 'rgba(255,214,10,0.92)';
-    ctx.fillRect(-bw / 2, -bh / 2, bw, bh);
+    box(ctx, -bw / 2, -bh / 2, bw, bh);
     ctx.strokeStyle = INK;
     ctx.lineWidth = Math.max(1.2, bw * 0.05);
     ctx.strokeRect(-bw / 2, -bh / 2, bw, bh);
-    ctx.beginPath();
-    ctx.arc(0, 0, bh * 0.3, 0, Math.PI * 2);
-    ctx.stroke();
+    ring(ctx, 0, 0, bh * 0.3);
     ctx.fillStyle = INK;
     ctx.font = `900 ${bh * 0.5}px ${DISPLAY}`;
     ctx.textAlign = 'center';
@@ -486,26 +498,26 @@ export function drawDuffel(ctx, cx, cy, s) {
   ctx.beginPath();
   ctx.roundRect(-s * 0.5, -s * 0.22, s, s * 0.44, s * 0.16);
   ctx.fill();
+  // Zipper highlight.
   ctx.strokeStyle = '#00E5FF';
   ctx.globalAlpha = 0.7;
   ctx.lineWidth = Math.max(1.5, s * 0.02);
-  ctx.beginPath();
-  ctx.moveTo(-s * 0.5, -s * 0.02);
-  ctx.lineTo(s * 0.5, -s * 0.02);
-  ctx.stroke();
+  seg(ctx, -s * 0.5, -s * 0.02, s * 0.5, -s * 0.02);
   ctx.globalAlpha = 1;
+  // Carry handle.
   ctx.strokeStyle = INK;
   ctx.lineWidth = Math.max(2, s * 0.035);
   ctx.beginPath();
-  ctx.arc(0, -s * 0.22, s * 0.2, Math.PI, Math.PI * 2);
+  ctx.arc(0, -s * 0.22, s * 0.2, Math.PI, TAU);
   ctx.stroke();
   // Cash spilling from the open top.
-  for (const [dx, dy, rot] of [[-0.18, -0.3, -0.3], [0.05, -0.36, 0.2], [0.24, -0.28, 0.5]]) {
+  const spills = [[-0.18, -0.3, -0.3], [0.05, -0.36, 0.2], [0.24, -0.28, 0.5]];
+  for (const [dx, dy, rot] of spills) {
     ctx.save();
     ctx.translate(dx * s, dy * s);
     ctx.rotate(rot);
     ctx.fillStyle = '#FFD60A';
-    ctx.fillRect(-s * 0.11, -s * 0.05, s * 0.22, s * 0.1);
+    box(ctx, -s * 0.11, -s * 0.05, s * 0.22, s * 0.1);
     ctx.strokeStyle = INK;
     ctx.lineWidth = Math.max(1, s * 0.012);
     ctx.strokeRect(-s * 0.11, -s * 0.05, s * 0.22, s * 0.1);
@@ -519,25 +531,25 @@ export function drawDuffel(ctx, cx, cy, s) {
 /** A light bar with magenta / cyan lenses and glow rays. */
 export function drawPoliceBar(ctx, x, y, w) {
   const bh = w * 0.16;
+  const lenses = [[x + w * 0.22, '#FF2E88'], [x + w * 0.78, '#00E5FF']];
   ctx.save();
-  for (const [lx, color] of [[x + w * 0.22, '#FF2E88'], [x + w * 0.78, '#00E5FF']]) {
+  for (const [lx, color] of lenses) {
     const rays = ctx.createLinearGradient(lx, y, lx, y - w * 0.5);
     rays.addColorStop(0, color === '#FF2E88' ? 'rgba(255,46,136,0.28)' : 'rgba(0,229,255,0.28)');
     rays.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = rays;
-    ctx.beginPath();
-    ctx.moveTo(lx - w * 0.06, y);
-    ctx.lineTo(lx - w * 0.22, y - w * 0.5);
-    ctx.lineTo(lx + w * 0.22, y - w * 0.5);
-    ctx.lineTo(lx + w * 0.06, y);
-    ctx.closePath();
-    ctx.fill();
+    trace(ctx, (c) => {
+      c.moveTo(lx - w * 0.06, y);
+      c.lineTo(lx - w * 0.22, y - w * 0.5);
+      c.lineTo(lx + w * 0.22, y - w * 0.5);
+      c.lineTo(lx + w * 0.06, y);
+    });
   }
   ctx.fillStyle = INK;
   ctx.beginPath();
   ctx.roundRect(x, y, w, bh, bh * 0.3);
   ctx.fill();
-  for (const [lx, color] of [[x + w * 0.22, '#FF2E88'], [x + w * 0.78, '#00E5FF']]) {
+  for (const [lx, color] of lenses) {
     ctx.save();
     ctx.fillStyle = color;
     ctx.shadowColor = color;
@@ -562,9 +574,10 @@ export function drawPoliceBar(ctx, x, y, w) {
 export function drawStreetScene(ctx, x, y, w, h, seed) {
   const rnd = rng(seed);
   const m = Math.min(w, h);
-  const signs = ['MOTEL', 'BAR', '24H', 'DINER', 'CLUB', 'LIQUOR'];
-  const pick = () => signs[Math.floor(rnd() * signs.length)];
+  const signTexts = ['MOTEL', 'BAR', '24H', 'DINER', 'CLUB', 'LIQUOR'];
+  const pick = () => signTexts[Math.floor(rnd() * signTexts.length)];
   ctx.save();
+  // Sagging wires across the top.
   ctx.strokeStyle = 'rgba(13,0,26,0.65)';
   ctx.lineWidth = Math.max(1.5, m * 0.008);
   for (const wy of [0.04, 0.09]) {
@@ -599,7 +612,8 @@ export function drawStreetScene(ctx, x, y, w, h, seed) {
   const sh = m * 0.13;
   sign(x + w * 0.06, y + h * 0.09, Math.min(w * 0.4, m * 0.42), sh, pick(), neonA);
   sign(x + w * 0.62, y + h * 0.07, Math.min(w * 0.3, m * 0.3), sh * 1.5, pick(), neonB);
-  const lx = x + w * 0.9; // lamp at the right edge, clear of the centred face
+  // Street lamp at the right edge, clear of the centred face.
+  const lx = x + w * 0.9;
   ctx.strokeStyle = INK;
   ctx.lineWidth = Math.max(2, m * 0.012);
   ctx.beginPath();
@@ -611,10 +625,9 @@ export function drawStreetScene(ctx, x, y, w, h, seed) {
   ctx.fillStyle = '#FFD60A';
   ctx.shadowColor = '#FFD60A';
   ctx.shadowBlur = m * 0.04;
-  ctx.beginPath();
-  ctx.arc(lx + w * 0.05, y + h * 0.51, Math.max(2, m * 0.018), 0, Math.PI * 2);
-  ctx.fill();
+  disc(ctx, lx + w * 0.05, y + h * 0.51, Math.max(2, m * 0.018));
   ctx.restore();
+  // Crowd of silhouettes along the bottom.
   const n = 5 + Math.floor(rnd() * 4);
   ctx.fillStyle = INK;
   for (let i = 0; i < n; i++) {
@@ -622,20 +635,18 @@ export function drawStreetScene(ctx, x, y, w, h, seed) {
     const ph = m * (0.1 + rnd() * 0.07);
     const hr = ph * 0.24;
     const baseY = y + h;
-    ctx.beginPath();
-    ctx.arc(px, baseY - ph + hr, hr, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(px - ph * 0.34, baseY);
-    ctx.quadraticCurveTo(px - ph * 0.3, baseY - ph * 0.62, px, baseY - ph * 0.66);
-    ctx.quadraticCurveTo(px + ph * 0.3, baseY - ph * 0.62, px + ph * 0.34, baseY);
-    ctx.closePath();
-    ctx.fill();
+    disc(ctx, px, baseY - ph + hr, hr);
+    trace(ctx, (c) => {
+      c.moveTo(px - ph * 0.34, baseY);
+      c.quadraticCurveTo(px - ph * 0.3, baseY - ph * 0.62, px, baseY - ph * 0.66);
+      c.quadraticCurveTo(px + ph * 0.3, baseY - ph * 0.62, px + ph * 0.34, baseY);
+    });
   }
+  // Wet-road neon reflections.
   ctx.globalAlpha = 0.25;
   for (const [rx, neon] of [[x + w * 0.2, neonA], [x + w * 0.78, neonB]]) {
     ctx.fillStyle = neon;
-    ctx.fillRect(rx, y + h * 0.92, w * 0.05, h * 0.08);
+    box(ctx, rx, y + h * 0.92, w * 0.05, h * 0.08);
   }
   ctx.restore();
 }
@@ -656,12 +667,14 @@ export function drawBeachScene(ctx, x, y, w, h, seed, night = false) {
     sea.addColorStop(1, 'rgba(43,10,74,0.34)');
   }
   ctx.fillStyle = sea;
-  ctx.fillRect(x, hy, w, h * 0.33);
+  box(ctx, x, hy, w, h * 0.33);
+  // Sun (or moon) reflection column on the water.
   const refl = ctx.createLinearGradient(x, hy, x, y + h * 0.85);
   refl.addColorStop(0, night ? 'rgba(0,229,255,0.3)' : 'rgba(255,214,10,0.35)');
   refl.addColorStop(1, night ? 'rgba(0,229,255,0)' : 'rgba(255,214,10,0)');
   ctx.fillStyle = refl;
-  ctx.fillRect(x + w * 0.66, hy, w * 0.09, h * 0.33);
+  box(ctx, x + w * 0.66, hy, w * 0.09, h * 0.33);
+  // Wave lines.
   ctx.strokeStyle = night ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.45)';
   ctx.lineWidth = Math.max(1.5, h * 0.008);
   ctx.lineCap = 'round';
@@ -676,26 +689,24 @@ export function drawBeachScene(ctx, x, y, w, h, seed, night = false) {
     }
     ctx.stroke();
   }
+  // Jetski + rider.
   const jx = x + w * 0.32;
   const jy = hy + h * 0.08;
   const js = w * 0.13;
   ctx.fillStyle = INK;
-  ctx.beginPath();
-  ctx.moveTo(jx - js * 0.5, jy);
-  ctx.quadraticCurveTo(jx - js * 0.2, jy - js * 0.22, jx + js * 0.3, jy - js * 0.16);
-  ctx.lineTo(jx + js * 0.5, jy);
-  ctx.quadraticCurveTo(jx, jy + js * 0.14, jx - js * 0.5, jy);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(jx - js * 0.05, jy - js * 0.34, js * 0.12, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(jx - js * 0.12, jy - js * 0.24);
-  ctx.quadraticCurveTo(jx, jy - js * 0.3, jx + js * 0.14, jy - js * 0.2);
-  ctx.lineTo(jx + js * 0.1, jy - js * 0.12);
-  ctx.closePath();
-  ctx.fill();
+  trace(ctx, (c) => {
+    c.moveTo(jx - js * 0.5, jy);
+    c.quadraticCurveTo(jx - js * 0.2, jy - js * 0.22, jx + js * 0.3, jy - js * 0.16);
+    c.lineTo(jx + js * 0.5, jy);
+    c.quadraticCurveTo(jx, jy + js * 0.14, jx - js * 0.5, jy);
+  });
+  disc(ctx, jx - js * 0.05, jy - js * 0.34, js * 0.12);
+  trace(ctx, (c) => {
+    c.moveTo(jx - js * 0.12, jy - js * 0.24);
+    c.quadraticCurveTo(jx, jy - js * 0.3, jx + js * 0.14, jy - js * 0.2);
+    c.lineTo(jx + js * 0.1, jy - js * 0.12);
+  });
+  // Wake.
   ctx.strokeStyle = 'rgba(255,255,255,0.55)';
   ctx.lineWidth = Math.max(1.5, h * 0.007);
   ctx.beginPath();
@@ -704,16 +715,16 @@ export function drawBeachScene(ctx, x, y, w, h, seed, night = false) {
   ctx.moveTo(jx - js * 0.5, jy + js * 0.08);
   ctx.lineTo(jx - js * 1.0, jy + js * 0.34);
   ctx.stroke();
+  // Distant sail.
   const sx = x + w * 0.82;
   ctx.fillStyle = night ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.85)';
-  ctx.beginPath();
-  ctx.moveTo(sx, hy - h * 0.05);
-  ctx.lineTo(sx, hy - h * 0.005);
-  ctx.lineTo(sx + w * 0.035, hy - h * 0.005);
-  ctx.closePath();
-  ctx.fill();
+  trace(ctx, (c) => {
+    c.moveTo(sx, hy - h * 0.05);
+    c.lineTo(sx, hy - h * 0.005);
+    c.lineTo(sx + w * 0.035, hy - h * 0.005);
+  });
   ctx.fillStyle = INK;
-  ctx.fillRect(sx - w * 0.015, hy - h * 0.004, w * 0.06, h * 0.012);
+  box(ctx, sx - w * 0.015, hy - h * 0.004, w * 0.06, h * 0.012);
   drawPalm(ctx, x + w * 0.95, y + h * 0.99, Math.min(h * 0.55, w * 0.9), -0.12);
   drawBirds(ctx, x + w * 0.05, y + h * 0.06, w * 0.4, h * 0.2, 3, seed + 5);
   ctx.restore();
@@ -751,8 +762,8 @@ function getDotTile() {
   const c = t.getContext('2d');
   c.fillStyle = '#ffffff';
   c.beginPath();
-  c.arc(3, 3, 1.5, 0, Math.PI * 2);
-  c.arc(9, 9, 1.5, 0, Math.PI * 2);
+  c.arc(3, 3, 1.5, 0, TAU);
+  c.arc(9, 9, 1.5, 0, TAU);
   c.fill();
   dotTile = t;
   return t;
@@ -778,6 +789,7 @@ function getNoiseTile() {
   return t;
 }
 
+// A radial-faded halftone cluster, composited in 'overlay' mode.
 function dotCluster(ctx, cx, cy, r, strength) {
   const size = Math.ceil(r * 2);
   const off = document.createElement('canvas');
@@ -785,13 +797,13 @@ function dotCluster(ctx, cx, cy, r, strength) {
   off.height = size;
   const c = off.getContext('2d');
   c.fillStyle = c.createPattern(getDotTile(), 'repeat');
-  c.fillRect(0, 0, size, size);
+  box(c, 0, 0, size, size);
   c.globalCompositeOperation = 'destination-in';
   const fade = c.createRadialGradient(r, r, 0, r, r, r);
   fade.addColorStop(0, `rgba(255,255,255,${strength})`);
   fade.addColorStop(1, 'rgba(255,255,255,0)');
   c.fillStyle = fade;
-  c.fillRect(0, 0, size, size);
+  box(c, 0, 0, size, size);
   ctx.save();
   ctx.globalCompositeOperation = 'overlay';
   ctx.drawImage(off, cx - r, cy - r);
@@ -820,14 +832,14 @@ export function drawGrain(ctx, w, h) {
   ctx.globalCompositeOperation = 'overlay';
   ctx.globalAlpha = 0.5;
   ctx.fillStyle = ctx.createPattern(getNoiseTile(), 'repeat');
-  ctx.fillRect(0, 0, w, h);
+  box(ctx, 0, 0, w, h);
   ctx.restore();
 }
 
 /* --------------------------------------------------------- panel borders */
 
-/** v2: crisp, straight, uniform comic borders (no jitter) plus a neon edge glow
- *  on the hero and one story panel, and a heavier outer frame. Panels tile
+/** v2: crisp, straight, uniform comic borders (no jitter), a neon edge glow on
+ *  the hero and one story panel, and a heavier outer frame. Panels tile
  *  exactly, so shared edges read as one clean ink line. */
 export function drawPanelBorders(ctx, panels, w, h) {
   const lw = Math.max(4, Math.min(7, Math.min(w, h) * 0.006));
@@ -845,17 +857,11 @@ export function drawPanelBorders(ctx, panels, w, h) {
   ctx.strokeStyle = '#00E5FF';
   ctx.shadowColor = '#00E5FF';
   ctx.shadowBlur = lw * 2.2;
-  ctx.beginPath();
-  ctx.moveTo(hero.x + lw, hero.y + lw * 0.8);
-  ctx.lineTo(hero.x + hero.w - lw, hero.y + lw * 0.8);
-  ctx.stroke();
+  seg(ctx, hero.x + lw, hero.y + lw * 0.8, hero.x + hero.w - lw, hero.y + lw * 0.8);
   const story = panels[Math.min(3, panels.length - 1)];
   ctx.strokeStyle = '#FF2E88';
   ctx.shadowColor = '#FF2E88';
-  ctx.beginPath();
-  ctx.moveTo(story.x + lw, story.y + story.h - lw * 0.8);
-  ctx.lineTo(story.x + story.w - lw, story.y + story.h - lw * 0.8);
-  ctx.stroke();
+  seg(ctx, story.x + lw, story.y + story.h - lw * 0.8, story.x + story.w - lw, story.y + story.h - lw * 0.8);
   ctx.restore();
   ctx.lineWidth = lw * 1.4;
   ctx.strokeRect(0, 0, w, h);
@@ -911,17 +917,13 @@ export function stickerLeonida(ctx, w, h) {
   ctx.translate(w - s * 0.1, h * 0.055 + r);
   ctx.rotate(0.07);
   ctx.fillStyle = INK;
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
-  ctx.fill();
+  disc(ctx, 0, 0, r);
   ctx.lineWidth = Math.max(2, s * 0.005);
   ctx.strokeStyle = '#FF7A18';
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(0, 0, r * 0.82, 0, Math.PI * 2);
+  ring(ctx, 0, 0, r);
   ctx.lineWidth = Math.max(1, s * 0.002);
   ctx.strokeStyle = '#00E5FF';
-  ctx.stroke();
+  ring(ctx, 0, 0, r * 0.82);
   ctx.fillStyle = '#FFD60A';
   starPath(ctx, 0, -r * 0.32, r * 0.3);
   ctx.fill();
@@ -964,14 +966,12 @@ export function stickerPalm(ctx, w, h) {
   const cy = h - s * 0.1;
   ctx.save();
   ctx.fillStyle = INK;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fill();
+  disc(ctx, cx, cy, r);
   ctx.lineWidth = Math.max(2, s * 0.004);
   ctx.strokeStyle = '#00E5FF';
-  ctx.stroke();
+  ring(ctx, cx, cy, r);
   ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.9, 0, Math.PI * 2);
+  ctx.arc(cx, cy, r * 0.9, 0, TAU);
   ctx.clip();
   drawPalm(ctx, cx - r * 0.1, cy + r * 0.75, r * 1.3, 0.12, '#00E5FF');
   ctx.restore();
@@ -987,15 +987,12 @@ export function drawPlaceholder(ctx, x, y, w, h) {
   g.addColorStop(0.55, '#7B2FBE');
   g.addColorStop(1, '#FF2E88');
   ctx.fillStyle = g;
-  ctx.fillRect(x, y, w, h);
+  box(ctx, x, y, w, h);
   ctx.globalAlpha = 0.12;
   ctx.strokeStyle = '#00E5FF';
   ctx.lineWidth = Math.max(3, w * 0.015);
   for (let i = -h; i < w + h; i += Math.max(14, w * 0.08)) {
-    ctx.beginPath();
-    ctx.moveTo(x + i, y + h);
-    ctx.lineTo(x + i + h, y);
-    ctx.stroke();
+    seg(ctx, x + i, y + h, x + i + h, y);
   }
   ctx.globalAlpha = 0.55;
   ctx.fillStyle = '#FFFFFF';

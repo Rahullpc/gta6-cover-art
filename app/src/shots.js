@@ -7,12 +7,34 @@
 
 import { applyPreset, presetById, SIZES } from './state.js';
 
+// Two animation frames after the paint, so the compositor has the final pixels.
 function markReady() {
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
       window.__shotReady = true;
     }),
   );
+}
+
+// Blit an export-resolution canvas onto the viewport-sized preview canvas.
+function blitCover(out) {
+  const preview = document.getElementById('preview');
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = window.innerWidth;
+  const cssH = window.innerHeight;
+  preview.width = Math.round(cssW * dpr);
+  preview.height = Math.round(cssH * dpr);
+  preview.style.width = `${cssW}px`;
+  preview.style.height = `${cssH}px`;
+  const ctx = preview.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#0D001A';
+  ctx.fillRect(0, 0, cssW, cssH);
+  const scale = Math.min(cssW / out.width, cssH / out.height);
+  const dw = out.width * scale;
+  const dh = out.height * scale;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(out, (cssW - dw) / 2, (cssH - dh) / 2, dw, dh);
 }
 
 export async function runShot(params, api) {
@@ -33,24 +55,7 @@ export async function runShot(params, api) {
     document.body.classList.add('shot-cover');
     editor.syncControls();
     // The exact export render, drawn to fill the viewport.
-    const out = renderToCanvas(state, state.size);
-    const preview = document.getElementById('preview');
-    const dpr = window.devicePixelRatio || 1;
-    const cssW = window.innerWidth;
-    const cssH = window.innerHeight;
-    preview.width = Math.round(cssW * dpr);
-    preview.height = Math.round(cssH * dpr);
-    preview.style.width = `${cssW}px`;
-    preview.style.height = `${cssH}px`;
-    const ctx = preview.getContext('2d');
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#0D001A';
-    ctx.fillRect(0, 0, cssW, cssH);
-    const scale = Math.min(cssW / out.width, cssH / out.height);
-    const dw = out.width * scale;
-    const dh = out.height * scale;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(out, (cssW - dw) / 2, (cssH - dh) / 2, dw, dh);
+    blitCover(renderToCanvas(state, state.size));
     markReady();
     return;
   }
