@@ -1,4 +1,7 @@
-/* Vice Cover Studio — dark studio theme, legible at 1280x720. */
+/* Vice Cover Studio v2 — dark studio theme, compact rail, legible at 1280x720.
+   v2 fixes the rail: a clearly visible, draggable scrollbar (v1 hid it behind a
+   subtle custom thumb), tighter section spacing, and the crop section scrolls
+   itself into view when a panel is selected, so sections 4-7 are easy to reach. */
 
 @font-face {
   font-family: 'Vice Display';
@@ -24,7 +27,7 @@ html, body { margin: 0; height: 100%; }
 body {
   background: var(--bg);
   color: var(--text);
-  font: 13px/1.45 system-ui, sans-serif;
+  font: 13px/1.4 system-ui, sans-serif;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -34,7 +37,7 @@ body {
   display: flex;
   align-items: baseline;
   gap: 14px;
-  padding: 8px 16px;
+  padding: 6px 16px;
   border-bottom: 1px solid var(--line);
   background: linear-gradient(90deg, #1B0B33, #0D001A 60%);
   flex: none;
@@ -42,7 +45,7 @@ body {
 .topbar h1 {
   margin: 0;
   font-family: 'Vice Display', 'Arial Black', sans-serif;
-  font-size: 20px;
+  font-size: 19px;
   letter-spacing: 1px;
   background: linear-gradient(90deg, var(--pink), var(--gold));
   -webkit-background-clip: text;
@@ -56,74 +59,88 @@ body {
 /* ------------------------------------------------------------- left rail */
 
 .rail {
-  width: 342px;
+  width: 326px;
   flex: none;
   overflow: hidden;
   background: var(--rail);
   border-right: 1px solid var(--line);
-  padding: 10px 12px 0;
+  padding: 8px 0 0 10px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 .rail-scroll-wrap { flex: 1; min-height: 0; position: relative; display: flex; }
 .rail-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: none;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 0 14px 4px 0;
+  gap: 6px;
+  padding: 0 16px 6px 0;
+  scrollbar-width: none;
 }
 .rail-scroll::-webkit-scrollbar { display: none; }
-.rail-track { position: absolute; top: 0; right: 0; bottom: 0; width: 10px; background: #1B0B33; border-radius: 5px; }
+/* A custom, always-visible scroll thumb (native overlay scrollbars vanish in
+   headless screenshots). Bright pink-orange on a dark track, draggable. */
+.rail-track {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  background: #241040;
+  border: 1px solid #2B0A4A;
+  border-radius: 6px;
+}
 .rail-thumb {
   position: absolute;
   left: 1px;
-  width: 8px;
-  min-height: 28px;
-  border-radius: 4px;
-  background: linear-gradient(#FF2E88, #7B2FBE);
+  width: 10px;
+  min-height: 48px;
+  border-radius: 5px;
+  background: linear-gradient(#FF2E88, #FF7A18);
+  box-shadow: 0 0 6px rgba(255, 46, 136, 0.6);
   cursor: grab;
 }
+.rail-thumb:active { cursor: grabbing; }
+
 .rail section {
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 8px 10px 10px;
+  padding: 5px 8px 6px;
   background: rgba(13, 0, 26, 0.45);
   flex: none;
 }
 .rail h2 {
-  margin: 0 0 7px;
+  margin: 0 0 4px;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 1.2px;
+  letter-spacing: 1.1px;
   color: var(--cyan);
 }
 .count { color: var(--muted); font-weight: 600; letter-spacing: 0; }
-.hint { margin: 4px 0; color: var(--muted); font-size: 12px; }
+.hint { margin: 3px 0; color: var(--muted); font-size: 11.5px; }
 .mini-label { color: var(--muted); font-size: 12px; align-self: center; }
 
-label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; margin-bottom: 6px; }
+label { display: flex; flex-direction: column; gap: 3px; font-weight: 600; margin-bottom: 5px; font-size: 12px; }
 input[type=text], select {
   font: inherit;
   color: var(--text);
   background: #0D001A;
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 5px 7px;
 }
 input[type=text]:focus, select:focus { outline: 1px solid var(--pink); }
-.row { display: flex; gap: 10px; align-items: flex-start; }
+.row { display: flex; gap: 9px; align-items: flex-start; }
 .row > label { flex: 1; }
 .row > .mini-label { flex: none; }
 .row > .size-row { flex: 1; }
 
 .slider span { color: var(--gold); font-weight: 700; }
-input[type=range] { width: 100%; accent-color: var(--pink); margin: 2px 0 0; }
+input[type=range] { width: 100%; accent-color: var(--pink); margin: 1px 0 0; }
 
 button {
   font: inherit;
@@ -132,7 +149,7 @@ button {
   background: #241040;
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 7px 9px;
+  padding: 6px 8px;
   cursor: pointer;
 }
 button:hover { border-color: var(--pink); }
@@ -140,7 +157,7 @@ button.active { border-color: var(--pink); box-shadow: 0 0 8px rgba(255, 46, 136
 button.ghost { background: transparent; }
 button.primary {
   width: 100%;
-  margin-top: 7px;
+  margin-top: 6px;
   background: linear-gradient(90deg, var(--pink), #FF7A18);
   color: #16091F;
   border: 0;
@@ -150,18 +167,18 @@ button.primary {
 .drop {
   border: 1.5px dashed var(--line);
   border-radius: 8px;
-  padding: 8px;
+  padding: 6px;
   text-align: center;
   color: var(--muted);
 }
 .drop.over { border-color: var(--cyan); background: rgba(0, 229, 255, 0.08); }
-.drop p { margin: 0 0 6px; }
+.drop p { margin: 0 0 5px; font-size: 12px; }
 .drop-btns { display: flex; gap: 6px; justify-content: center; }
 .file-label {
   flex-direction: row;
   align-items: center;
   margin: 0;
-  padding: 7px 9px;
+  padding: 6px 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #241040;
@@ -169,36 +186,36 @@ button.primary {
   font-weight: 700;
 }
 .file-label:hover { border-color: var(--pink); }
-.thumbs { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
-.thumbs li { display: flex; align-items: center; gap: 8px; }
-.thumbs img { width: 34px; height: 34px; object-fit: cover; border-radius: 5px; border: 1px solid var(--line); }
-.thumbs span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
-.thumb-del { padding: 2px 8px; font-size: 14px; line-height: 1; }
+.thumbs { list-style: none; margin: 5px 0 0; padding: 0; display: flex; flex-direction: row; flex-wrap: wrap; gap: 4px; }
+.thumbs li { display: flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; background: #0D001A; }
+.thumbs img { width: 24px; height: 24px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); }
+.thumbs span { max-width: 62px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
+.thumb-del { padding: 0 5px; font-size: 13px; line-height: 1; }
 
 /* presets / layouts / grades */
-.preset-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.preset-btn { font-size: 12px; padding: 8px 6px; }
-.layout-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.layout-btn { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px; font-size: 11px; }
-.layout-btn canvas { width: 64px; height: 44px; border-radius: 4px; }
-.grade-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
-.grade-btn { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px; font-size: 11px; }
-.grade-btn i { width: 100%; height: 14px; border-radius: 4px; display: block; }
+.preset-row { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.preset-btn { font-size: 11.5px; padding: 6px 5px; }
+.layout-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.layout-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px 3px; font-size: 10.5px; }
+.layout-btn canvas { width: 56px; height: 38px; border-radius: 4px; }
+.grade-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 6px; }
+.grade-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px 3px; font-size: 10.5px; }
+.grade-btn i { width: 100%; height: 12px; border-radius: 4px; display: block; }
 .color-row { display: flex; gap: 6px; align-items: center; }
-.color-btn { width: 24px; height: 24px; border-radius: 50%; padding: 0; border: 2px solid var(--line); }
+.color-btn { width: 22px; height: 22px; border-radius: 50%; padding: 0; border: 2px solid var(--line); }
 .color-btn.active { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0, 229, 255, 0.6); }
 
 /* stickers */
-.checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
-.checks label { flex-direction: row; align-items: center; gap: 6px; margin: 0; font-weight: 600; }
+.checks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px 4px; }
+.checks label { flex-direction: row; align-items: center; gap: 4px; margin: 0; font-weight: 600; font-size: 10.5px; }
 .checks input { accent-color: var(--pink); }
 
 /* export */
-.export-section { flex: none; background: var(--rail); border-top: 1px solid var(--line); padding-bottom: 12px; }
+.export-section { flex: none; background: var(--rail); border-top: 1px solid var(--line); padding: 6px 10px 10px 0; margin-right: 2px; }
 .size-row { display: flex; gap: 5px; }
-.size-btn { font-size: 11px; padding: 5px 6px; }
-.export-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 7px; }
-.export-btn { font-size: 11px; padding: 7px 4px; border-color: #4a1f7a; }
+.size-btn { font-size: 11px; padding: 4px 6px; }
+.export-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 6px; }
+.export-btn { font-size: 10.5px; padding: 6px 3px; border-color: #4a1f7a; }
 
 /* ----------------------------------------------------------------- stage */
 
@@ -211,10 +228,10 @@ button.primary {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 6px 14px;
+  padding: 5px 14px;
   border-top: 1px solid var(--line);
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12.5px;
   background: var(--rail);
 }
 #status { color: var(--gold); text-align: right; }

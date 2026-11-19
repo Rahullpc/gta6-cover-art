@@ -1,12 +1,17 @@
-// The editor: wires every control to the shared state, manages the photo roll
+// editor.js — wires every control to the shared state, manages the photo roll
 // (upload, drag-drop, samples), per-panel crop/zoom/drag, and the live preview.
 // The preview is the export render scaled to fit the stage, so it is always
 // identical to the PNG the export buttons write.
+//
+// v2: dragging inverts the face-safe framing engine (framing.js), so a drag can
+// recompose a panel but can never push a face out of frame. The control rail is
+// compact and uses a visible scrollbar so every section is reachable at 720px.
 
 import { LAYOUTS, layoutById } from './layouts.js';
 import { GRADES, gradeById } from './grades.js';
 import { TITLE_COLORS } from './lettering.js';
 import { PRESETS, SIZES, SAMPLE_PHOTOS, applyPreset, activeEdits, clamp, sizeById } from './state.js';
+import { computeFrame, focusOf, panFromDelta } from './framing.js';
 import { renderCover } from './cover.js';
 import { exportPNG, exportAll } from './export.js';
 
@@ -51,7 +56,6 @@ export function initEditor(state) {
     preview.height = Math.round(cssH * dpr);
     preview.style.width = `${cssW}px`;
     preview.style.height = `${cssH}px`;
-    // Render at full export resolution, then scale to fit the stage.
     const off = document.createElement('canvas');
     off.width = size.w;
     off.height = size.h;
@@ -70,9 +74,9 @@ export function initEditor(state) {
 
   new ResizeObserver(requestRender).observe(wrap);
 
-  /* --------------------------- rail scroll indicator (custom, always visible) */
+  /* ------------------------- custom rail scrollbar (always visible, draggable) */
 
-  const scroller = document.querySelector('.rail-scroll');
+  const scroller = $('railScroll');
   const track = $('railTrack');
   const thumb = $('railThumb');
   function syncRailThumb() {
@@ -82,7 +86,7 @@ export function initEditor(state) {
       return;
     }
     track.style.display = '';
-    const th = Math.max(28, (scroller.clientHeight / scroller.scrollHeight) * track.clientHeight);
+    const th = Math.max(48, (scroller.clientHeight / scroller.scrollHeight) * track.clientHeight);
     thumb.style.height = `${th}px`;
     thumb.style.top = `${(scroller.scrollTop / max) * (track.clientHeight - th)}px`;
   }
@@ -223,17 +227,17 @@ export function initEditor(state) {
     btn.dataset.layout = layout.id;
     btn.title = layout.blurb;
     const thumb = document.createElement('canvas');
-    thumb.width = 64;
-    thumb.height = 44;
+    thumb.width = 56;
+    thumb.height = 38;
     const c = thumb.getContext('2d');
-    const g = c.createLinearGradient(0, 0, 64, 44);
+    const g = c.createLinearGradient(0, 0, 56, 38);
     g.addColorStop(0, '#FF2E88');
     g.addColorStop(1, '#2B0A4A');
     c.fillStyle = g;
-    c.fillRect(0, 0, 64, 44);
+    c.fillRect(0, 0, 56, 38);
     c.strokeStyle = '#0D001A';
     c.lineWidth = 2;
-    for (const p of layout.panels(64, 44)) c.strokeRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
+    for (const p of layout.panels(56, 38)) c.strokeRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
     const label = document.createElement('span');
     label.textContent = layout.name;
     btn.append(thumb, label);
@@ -332,12 +336,11 @@ export function initEditor(state) {
     if (sel < 0 || !panels[sel]) {
       box.hidden = true;
       $('panelHint').hidden = false;
-      syncRailThumb();
       return;
     }
     box.hidden = false;
     $('panelHint').hidden = true;
-    $('panelLabel').textContent = `Panel ${sel + 1} of ${panels.length} — drag it on the cover, scroll to zoom`;
+    $('panelLabel').textContent = `Panel ${sel + 1} of ${panels.length} — drag on the cover, scroll to zoom`;
     const photoSel = $('panelPhoto');
     photoSel.textContent = '';
     state.photos.forEach((photo, i) => {
@@ -350,7 +353,6 @@ export function initEditor(state) {
     photoSel.value = String(edit.photo % Math.max(1, state.photos.length));
     $('panelZoom').value = String(Math.round(edit.zoom * 100));
     $('panelZoomVal').textContent = `${edit.zoom.toFixed(2)}×`;
-    syncRailThumb();
   }
 
   function selectPanel(idx) {
@@ -396,32 +398,36 @@ export function initEditor(state) {
     return panelRects().findIndex((p) => pt.x >= p.x && pt.x <= p.x + p.w && pt.y >= p.y && pt.y <= p.y + p.h);
   }
 
+  function frameFor(idx) {
+    const p = panelRects()[idx];
+    const edit = activeEdits(state)[idx];
+    const photo = state.photos[edit.photo % Math.max(1, state.photos.length)];
+    if (!photo) return null;
+    return computeFrame(photo.img, p, edit, focusOf(photo));
+  }
+
   preview.addEventListener('pointerdown', (e) => {
     const pt = coverPoint(e);
     if (!pt.inside) return;
     const idx = hitPanel(pt);
     if (idx < 0) return;
     if (idx !== state.selectedPanel) selectPanel(idx);
-    const edit = activeEdits(state)[idx];
-    drag = { idx, startX: e.clientX, startY: e.clientY, panX: edit.panX, panY: edit.panY };
+    // On a user click, bring the crop controls into view on the short rail.
+    $('panelSection').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    const frame = frameFor(idx);
+    if (!frame) return;
+    drag = { idx, startX: e.clientX, startY: e.clientY, frame };
     preview.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
   preview.addEventListener('pointermove', (e) => {
     if (!drag) return;
-    const p = panelRects()[drag.idx];
     const edit = activeEdits(state)[drag.idx];
-    const photo = state.photos[edit.photo % Math.max(1, state.photos.length)];
-    if (!photo) return;
-    const iw = photo.img.naturalWidth;
-    const ih = photo.img.naturalHeight;
-    const scale = Math.max(p.w / iw, p.h / ih) * edit.zoom;
-    const maxX = Math.max(1e-6, (iw * scale - p.w) / 2);
-    const maxY = Math.max(1e-6, (ih * scale - p.h) / 2);
-    const dx = (e.clientX - drag.startX) / fit.scale;
-    const dy = (e.clientY - drag.startY) / fit.scale;
-    edit.panX = clamp(drag.panX + dx / maxX, -1, 1);
-    edit.panY = clamp(drag.panY + dy / maxY, -1, 1);
+    const dxImg = (e.clientX - drag.startX) / fit.scale / drag.frame.scale;
+    const dyImg = (e.clientY - drag.startY) / fit.scale / drag.frame.scale;
+    const pan = panFromDelta(drag.frame, dxImg, dyImg);
+    edit.panX = pan.panX;
+    edit.panY = pan.panY;
     requestRender();
   });
   const endDrag = () => {

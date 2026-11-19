@@ -1,21 +1,25 @@
-// The poster's vector art, all Canvas 2D and all deterministic (seeded RNG),
-// so the live preview and the exported PNG are pixel-identical. Every panel
-// gets action: striped sun, palms, neon skyline, sport car with tire smoke,
-// beach jetski, neon street signs with a crowd, helicopter / money / police
-// vignettes, halftone dots, film grain, hand-inked panel borders and badges.
+// decor.js — the poster's vector art, all Canvas 2D and fully deterministic.
+//
+// A seeded PRNG drives every scatter (stars, birds, windows, money) so the live
+// preview and the exported PNG are pixel-identical. Each panel gets action:
+// striped synthwave sun, palms, neon skyline, a sport car with tire smoke, a
+// beach jetski, neon street signs with a crowd, helicopter / money / police /
+// duffel vignettes, a tiny plane in the sky, halftone dots, film grain, crisp
+// comic borders and sticker badges. v2 borders are straight and uniform (neat,
+// not jittered) and hero decor is pinned to corners so it never covers a face.
 
 const INK = '#0D001A';
 const DISPLAY = '"Vice Display", "Arial Black", sans-serif';
 
-/** xorshift32 PRNG: same seed, same poster, every render. */
+/** mulberry32 PRNG: same seed, same poster, every render. */
 export function rng(seed) {
-  let s = (seed >>> 0) || 1;
-  return function next() {
-    s ^= s << 13;
-    s ^= s >>> 17;
-    s ^= s << 5;
-    s >>>= 0;
-    return s / 4294967296;
+  let a = (seed >>> 0) || 1;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
@@ -53,7 +57,7 @@ export function drawSun(ctx, cx, cy, r, alpha = 0.92) {
 
 /* ------------------------------------------------------------------ moon */
 
-/** Pale moon with a cyan halo for the night grades, plus a few hard stars. */
+/** Pale moon with a cyan halo for night grades, plus a few hard craters. */
 export function drawMoon(ctx, cx, cy, r) {
   ctx.save();
   const halo = ctx.createRadialGradient(cx, cy, r * 0.4, cx, cy, r * 2.4);
@@ -164,6 +168,31 @@ export function drawBirds(ctx, x, y, w, h, n, seed) {
   ctx.restore();
 }
 
+/** A tiny prop plane silhouette crossing the sky (a small story detail). */
+export function drawPlane(ctx, cx, cy, s, tilt = -0.08) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(tilt);
+  ctx.fillStyle = INK;
+  ctx.globalAlpha = 0.8;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, s * 0.5, s * 0.12, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.05, 0);
+  ctx.lineTo(-s * 0.28, -s * 0.34);
+  ctx.lineTo(-s * 0.12, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.42, 0);
+  ctx.lineTo(-s * 0.56, -s * 0.2);
+  ctx.lineTo(-s * 0.46, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
 /* --------------------------------------------------------------- skyline */
 
 /** Neon towers rising from the bottom of a region: rooflines, windows, masts. */
@@ -219,8 +248,8 @@ export function drawSkyline(ctx, x, y, w, h, seed) {
 
 /* ------------------------------------------------------------------- car */
 
-/** Low sport car facing right, tilted a little, with underglow, tire smoke,
- *  speed lines, neon rims and a tiny yellow plate. Box: W wide, W*0.3 tall. */
+/** Low sport car facing right, tilted, with underglow, tire smoke, speed lines,
+ *  neon rims and a tiny yellow plate. Box: W wide, W*0.3 tall. */
 export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
   const H = W * 0.3;
   ctx.save();
@@ -228,7 +257,6 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
   ctx.rotate(tilt);
   ctx.translate(-W / 2, -H / 2);
 
-  // Tire smoke drifting off the rear.
   const rnd = rng(4242);
   for (let i = 0; i < 5; i++) {
     const px = -W * (0.02 + i * 0.045);
@@ -239,7 +267,6 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
     ctx.arc(px, py, pr, 0, Math.PI * 2);
     ctx.fill();
   }
-  // Speed lines.
   ctx.strokeStyle = accent;
   ctx.globalAlpha = 0.4;
   ctx.lineWidth = Math.max(1.5, W * 0.006);
@@ -251,7 +278,6 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
   }
   ctx.globalAlpha = 1;
 
-  // Underglow puddle.
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
   const glow = ctx.createRadialGradient(W * 0.5, H * 0.9, W * 0.02, W * 0.5, H * 0.9, W * 0.55);
@@ -264,7 +290,6 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
   ctx.fill();
   ctx.restore();
 
-  // Body: spoiler -> cabin -> long hood -> nose, with wheel arches cut out.
   const body = new Path2D();
   body.moveTo(W * 0.02, H * 0.6);
   body.lineTo(W * 0.035, H * 0.4);
@@ -284,7 +309,6 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
   ctx.fillStyle = INK;
   ctx.fill(body);
 
-  // Magenta rim light along the roof and hood.
   ctx.save();
   ctx.strokeStyle = '#FF2E88';
   ctx.globalAlpha = 0.85;
@@ -300,7 +324,6 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
   ctx.stroke();
   ctx.restore();
 
-  // Glass.
   ctx.fillStyle = 'rgba(0,229,255,0.3)';
   ctx.beginPath();
   ctx.moveTo(W * 0.3, H * 0.24);
@@ -309,7 +332,6 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
   ctx.closePath();
   ctx.fill();
 
-  // Wheels with neon rims.
   for (const wx of [W * 0.22, W * 0.78]) {
     ctx.fillStyle = '#050308';
     ctx.beginPath();
@@ -324,7 +346,6 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
     ctx.globalAlpha = 1;
   }
 
-  // Headlight slash + beam.
   ctx.fillStyle = '#FFD60A';
   ctx.beginPath();
   ctx.moveTo(W * 0.955, H * 0.43);
@@ -344,7 +365,6 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
   ctx.closePath();
   ctx.fill();
 
-  // Tiny plate.
   ctx.fillStyle = '#FFD60A';
   ctx.fillRect(W * 0.025, H * 0.48, W * 0.09, H * 0.12);
   ctx.strokeStyle = INK;
@@ -364,7 +384,6 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
 export function drawHelicopter(ctx, cx, cy, s) {
   ctx.save();
   ctx.translate(cx, cy);
-  // Searchlight cone.
   const cone = ctx.createLinearGradient(0, s * 0.1, 0, s * 1.5);
   cone.addColorStop(0, 'rgba(255,214,10,0.3)');
   cone.addColorStop(1, 'rgba(255,214,10,0)');
@@ -375,7 +394,6 @@ export function drawHelicopter(ctx, cx, cy, s) {
   ctx.lineTo(s * 0.6, s * 1.5);
   ctx.closePath();
   ctx.fill();
-  // Tail boom + fin.
   ctx.fillStyle = INK;
   ctx.beginPath();
   ctx.moveTo(-s * 0.25, -s * 0.04);
@@ -385,7 +403,6 @@ export function drawHelicopter(ctx, cx, cy, s) {
   ctx.closePath();
   ctx.fill();
   ctx.fillRect(-s * 0.66, -s * 0.2, s * 0.05, s * 0.16);
-  // Body.
   ctx.beginPath();
   ctx.ellipse(0, 0, s * 0.32, s * 0.14, 0, 0, Math.PI * 2);
   ctx.fill();
@@ -399,12 +416,10 @@ export function drawHelicopter(ctx, cx, cy, s) {
   ctx.ellipse(0, -s * 0.02, s * 0.3, s * 0.12, 0, Math.PI, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
-  // Cockpit glass.
   ctx.fillStyle = 'rgba(0,229,255,0.4)';
   ctx.beginPath();
   ctx.ellipse(s * 0.18, -s * 0.02, s * 0.1, s * 0.08, 0, 0, Math.PI * 2);
   ctx.fill();
-  // Rotor blur + blade + mast.
   ctx.fillStyle = 'rgba(13,0,26,0.25)';
   ctx.beginPath();
   ctx.ellipse(0, -s * 0.22, s * 0.52, s * 0.035, 0, 0, Math.PI * 2);
@@ -419,7 +434,6 @@ export function drawHelicopter(ctx, cx, cy, s) {
   ctx.moveTo(0, -s * 0.14);
   ctx.lineTo(0, -s * 0.22);
   ctx.stroke();
-  // Skids.
   ctx.lineWidth = Math.max(1.5, s * 0.02);
   ctx.beginPath();
   ctx.moveTo(-s * 0.22, s * 0.18);
@@ -459,6 +473,42 @@ export function drawMoney(ctx, x, y, w, h, n, seed) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('$', 0, bh * 0.03);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/** A duffel bag stuffed with cash — the heist prop from the reference art. */
+export function drawDuffel(ctx, cx, cy, s) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.roundRect(-s * 0.5, -s * 0.22, s, s * 0.44, s * 0.16);
+  ctx.fill();
+  ctx.strokeStyle = '#00E5FF';
+  ctx.globalAlpha = 0.7;
+  ctx.lineWidth = Math.max(1.5, s * 0.02);
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.5, -s * 0.02);
+  ctx.lineTo(s * 0.5, -s * 0.02);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = Math.max(2, s * 0.035);
+  ctx.beginPath();
+  ctx.arc(0, -s * 0.22, s * 0.2, Math.PI, Math.PI * 2);
+  ctx.stroke();
+  // Cash spilling from the open top.
+  for (const [dx, dy, rot] of [[-0.18, -0.3, -0.3], [0.05, -0.36, 0.2], [0.24, -0.28, 0.5]]) {
+    ctx.save();
+    ctx.translate(dx * s, dy * s);
+    ctx.rotate(rot);
+    ctx.fillStyle = '#FFD60A';
+    ctx.fillRect(-s * 0.11, -s * 0.05, s * 0.22, s * 0.1);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = Math.max(1, s * 0.012);
+    ctx.strokeRect(-s * 0.11, -s * 0.05, s * 0.22, s * 0.1);
     ctx.restore();
   }
   ctx.restore();
@@ -508,24 +558,21 @@ export function drawPoliceBar(ctx, x, y, w) {
 /* ----------------------------------------------------------- street scene */
 
 /** Neon shop signs, hanging wires, a crowd of silhouettes and wet-road glow.
- *  All detail sizes follow min(w, h) so narrow slices stay readable, and sign
- *  text is shrunk to fit its box — no garbled overflow. */
+ *  Sign text shrinks to fit its box so nothing garbles or overflows. */
 export function drawStreetScene(ctx, x, y, w, h, seed) {
   const rnd = rng(seed);
   const m = Math.min(w, h);
   const signs = ['MOTEL', 'BAR', '24H', 'DINER', 'CLUB', 'LIQUOR'];
   const pick = () => signs[Math.floor(rnd() * signs.length)];
   ctx.save();
-  // Hanging wires.
   ctx.strokeStyle = 'rgba(13,0,26,0.65)';
   ctx.lineWidth = Math.max(1.5, m * 0.008);
-  for (const wy of [0.08, 0.16]) {
+  for (const wy of [0.04, 0.09]) {
     ctx.beginPath();
     ctx.moveTo(x, y + h * wy);
     ctx.quadraticCurveTo(x + w * 0.5, y + h * (wy + 0.06), x + w, y + h * wy);
     ctx.stroke();
   }
-  // Two neon signs, sized to the panel's short side.
   const neonA = rnd() > 0.5 ? '#FF2E88' : '#00E5FF';
   const neonB = neonA === '#FF2E88' ? '#FFD60A' : '#FF6EC7';
   const sign = (sx, sy, sw, sh, text, neon) => {
@@ -552,24 +599,22 @@ export function drawStreetScene(ctx, x, y, w, h, seed) {
   const sh = m * 0.13;
   sign(x + w * 0.06, y + h * 0.09, Math.min(w * 0.4, m * 0.42), sh, pick(), neonA);
   sign(x + w * 0.62, y + h * 0.07, Math.min(w * 0.3, m * 0.3), sh * 1.5, pick(), neonB);
-  // Street lamp with a warm cone.
-  const lx = x + w * 0.52;
+  const lx = x + w * 0.9; // lamp at the right edge, clear of the centred face
   ctx.strokeStyle = INK;
   ctx.lineWidth = Math.max(2, m * 0.012);
   ctx.beginPath();
   ctx.moveTo(lx, y + h);
-  ctx.lineTo(lx, y + h * 0.42);
-  ctx.lineTo(lx + w * 0.05, y + h * 0.42);
+  ctx.lineTo(lx, y + h * 0.5);
+  ctx.lineTo(lx + w * 0.05, y + h * 0.5);
   ctx.stroke();
   ctx.save();
   ctx.fillStyle = '#FFD60A';
   ctx.shadowColor = '#FFD60A';
   ctx.shadowBlur = m * 0.04;
   ctx.beginPath();
-  ctx.arc(lx + w * 0.05, y + h * 0.43, Math.max(2, m * 0.018), 0, Math.PI * 2);
+  ctx.arc(lx + w * 0.05, y + h * 0.51, Math.max(2, m * 0.018), 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
-  // Crowd along the bottom, sized to the short side.
   const n = 5 + Math.floor(rnd() * 4);
   ctx.fillStyle = INK;
   for (let i = 0; i < n; i++) {
@@ -587,7 +632,6 @@ export function drawStreetScene(ctx, x, y, w, h, seed) {
     ctx.closePath();
     ctx.fill();
   }
-  // Wet neon reflections at the kerb.
   ctx.globalAlpha = 0.25;
   for (const [rx, neon] of [[x + w * 0.2, neonA], [x + w * 0.78, neonB]]) {
     ctx.fillStyle = neon;
@@ -598,13 +642,11 @@ export function drawStreetScene(ctx, x, y, w, h, seed) {
 
 /* ------------------------------------------------------------ beach scene */
 
-/** Sea horizon with waves, a jetski and its wake, a distant sail, palm edge.
- *  `night` darkens the sea and swaps the sun reflection for moonlight. */
+/** Sea horizon with waves, a jetski and its wake, a distant sail, palm edge. */
 export function drawBeachScene(ctx, x, y, w, h, seed, night = false) {
   const rnd = rng(seed);
-  const hy = y + h * 0.52;
+  const hy = y + h * 0.62; // horizon low, so the sea sits below the face zone
   ctx.save();
-  // Sea wash + reflection column.
   const sea = ctx.createLinearGradient(x, hy, x, y + h * 0.85);
   if (night) {
     sea.addColorStop(0, 'rgba(6,18,40,0.55)');
@@ -620,7 +662,6 @@ export function drawBeachScene(ctx, x, y, w, h, seed, night = false) {
   refl.addColorStop(1, night ? 'rgba(0,229,255,0)' : 'rgba(255,214,10,0)');
   ctx.fillStyle = refl;
   ctx.fillRect(x + w * 0.66, hy, w * 0.09, h * 0.33);
-  // Wave strokes (moonlit and subtle at night).
   ctx.strokeStyle = night ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.45)';
   ctx.lineWidth = Math.max(1.5, h * 0.008);
   ctx.lineCap = 'round';
@@ -635,7 +676,6 @@ export function drawBeachScene(ctx, x, y, w, h, seed, night = false) {
     }
     ctx.stroke();
   }
-  // Jetski + rider + wake.
   const jx = x + w * 0.32;
   const jy = hy + h * 0.08;
   const js = w * 0.13;
@@ -664,7 +704,6 @@ export function drawBeachScene(ctx, x, y, w, h, seed, night = false) {
   ctx.moveTo(jx - js * 0.5, jy + js * 0.08);
   ctx.lineTo(jx - js * 1.0, jy + js * 0.34);
   ctx.stroke();
-  // Distant sail.
   const sx = x + w * 0.82;
   ctx.fillStyle = night ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.85)';
   ctx.beginPath();
@@ -675,7 +714,6 @@ export function drawBeachScene(ctx, x, y, w, h, seed, night = false) {
   ctx.fill();
   ctx.fillStyle = INK;
   ctx.fillRect(sx - w * 0.015, hy - h * 0.004, w * 0.06, h * 0.012);
-  // Foreground palm at the right edge + birds.
   drawPalm(ctx, x + w * 0.95, y + h * 0.99, Math.min(h * 0.55, w * 0.9), -0.12);
   drawBirds(ctx, x + w * 0.05, y + h * 0.06, w * 0.4, h * 0.2, 3, seed + 5);
   ctx.restore();
@@ -683,16 +721,20 @@ export function drawBeachScene(ctx, x, y, w, h, seed, night = false) {
 
 /* --------------------------------------------------------------- vignette */
 
-/** Small filler panels: 0 helicopter, 1 fluttering money, 2 police light bar. */
+/** Small filler panels: 0 helicopter, 1 money, 2 police bar, 3 duffel of cash.
+ *  Props sit in the lower half so they never cross the face in the upper third. */
 export function drawVignette(ctx, x, y, w, h, variant, seed) {
   if (variant === 0) {
-    drawHelicopter(ctx, x + w * 0.5, y + h * 0.38, Math.min(w, h) * 0.62);
-    drawBirds(ctx, x + w * 0.08, y + h * 0.08, w * 0.3, h * 0.18, 2, seed + 9);
+    drawHelicopter(ctx, x + w * 0.5, y + h * 0.78, Math.min(w, h) * 0.58);
+    drawBirds(ctx, x + w * 0.08, y + h * 0.05, w * 0.3, h * 0.1, 2, seed + 9);
   } else if (variant === 1) {
-    drawMoney(ctx, x, y, w, h, 7, seed);
+    drawMoney(ctx, x, y + h * 0.62, w, h * 0.36, 7, seed);
+  } else if (variant === 2) {
+    drawPoliceBar(ctx, x + w * 0.18, y + h * 0.8, w * 0.64);
+    drawMoney(ctx, x + w * 0.1, y + h * 0.62, w * 0.8, h * 0.16, 3, seed + 3);
   } else {
-    drawPoliceBar(ctx, x + w * 0.18, y + h * 0.6, w * 0.64);
-    drawMoney(ctx, x + w * 0.1, y + h * 0.05, w * 0.8, h * 0.4, 3, seed + 3);
+    drawDuffel(ctx, x + w * 0.5, y + h * 0.8, Math.min(w, h) * 0.62);
+    drawMoney(ctx, x + w * 0.1, y + h * 0.62, w * 0.8, h * 0.16, 3, seed + 5);
   }
 }
 
@@ -784,26 +826,18 @@ export function drawGrain(ctx, w, h) {
 
 /* --------------------------------------------------------- panel borders */
 
-/** Thick hand-inked black borders (slightly jittered corners, never perfectly
- *  straight) plus a neon edge glow on the hero and one story panel. */
-export function drawPanelBorders(ctx, panels, w, h, seed = 7) {
-  const rnd = rng(seed);
-  const lw = Math.max(4, Math.min(7, Math.min(w, h) * 0.0055));
+/** v2: crisp, straight, uniform comic borders (no jitter) plus a neon edge glow
+ *  on the hero and one story panel, and a heavier outer frame. Panels tile
+ *  exactly, so shared edges read as one clean ink line. */
+export function drawPanelBorders(ctx, panels, w, h) {
+  const lw = Math.max(4, Math.min(7, Math.min(w, h) * 0.006));
   ctx.save();
   ctx.strokeStyle = INK;
   ctx.lineJoin = 'miter';
   ctx.lineWidth = lw;
   for (const p of panels) {
-    const j = () => (rnd() - 0.5) * lw * 0.9;
-    ctx.beginPath();
-    ctx.moveTo(p.x + lw / 2 + j(), p.y + lw / 2 + j());
-    ctx.lineTo(p.x + p.w - lw / 2 + j(), p.y + lw / 2 + j());
-    ctx.lineTo(p.x + p.w - lw / 2 + j(), p.y + p.h - lw / 2 + j());
-    ctx.lineTo(p.x + lw / 2 + j(), p.y + p.h - lw / 2 + j());
-    ctx.closePath();
-    ctx.stroke();
+    ctx.strokeRect(p.x + lw / 2, p.y + lw / 2, p.w - lw, p.h - lw);
   }
-  // Neon edge glow: hero top edge cyan, a story panel bottom edge magenta.
   const hero = panels.find((p) => p.hero) ?? panels[0];
   ctx.save();
   ctx.globalAlpha = 0.55;
@@ -823,7 +857,7 @@ export function drawPanelBorders(ctx, panels, w, h, seed = 7) {
   ctx.lineTo(story.x + story.w - lw, story.y + story.h - lw * 0.8);
   ctx.stroke();
   ctx.restore();
-  ctx.lineWidth = lw * 1.35;
+  ctx.lineWidth = lw * 1.4;
   ctx.strokeRect(0, 0, w, h);
   ctx.restore();
 }
@@ -907,7 +941,7 @@ export function stickerStars(ctx, w, h) {
   for (let i = 0; i < 3; i++) {
     const r = s * (0.022 + rnd() * 0.02);
     const cx = w * (0.05 + rnd() * 0.07);
-    const cy = h * (0.17 + rnd() * 0.09);
+    const cy = h * (0.12 + rnd() * 0.05);
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate((rnd() - 0.5) * 0.6);

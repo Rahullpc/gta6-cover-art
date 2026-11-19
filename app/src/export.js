@@ -1,6 +1,6 @@
-// PNG export: render the cover at a post size on a fresh canvas and download
-// it. The same renderCover() call paints the live preview, so the exported
-// file matches what the editor shows, pixel for pixel.
+// export.js — PNG export. Render the cover at a post size on a fresh canvas and
+// download it. The same renderCover() call paints the live preview, so the
+// exported file matches what the editor shows, pixel for pixel.
 
 import { renderToCanvas } from './cover.js';
 import { SIZES, sizeById } from './state.js';

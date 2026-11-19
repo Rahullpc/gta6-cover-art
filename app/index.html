@@ -9,12 +9,12 @@
 <body>
 <header class="topbar">
   <h1>VICE COVER STUDIO</h1>
-  <p class="tag">GTA-style multi-panel cover maker · 100% offline · photos never leave this machine</p>
+  <p class="tag">GTA-style multi-panel cover maker · face-safe framing · 100% offline · photos never leave this machine</p>
 </header>
 <main class="app">
   <aside class="rail">
     <div class="rail-scroll-wrap">
-    <div class="rail-scroll">
+    <div class="rail-scroll" id="railScroll">
     <section>
       <h2>1 · Photos <span id="photoCount" class="count">0/5</span></h2>
       <div id="dropZone" class="drop">
@@ -37,8 +37,8 @@
     <section>
       <h2>4 · Colour grade</h2>
       <div id="gradeRow" class="grade-row"></div>
-      <label class="slider">Intensity <span id="gradeIntensityVal">90%</span>
-        <input id="gradeIntensity" type="range" min="0" max="100" value="90">
+      <label class="slider">Intensity <span id="gradeIntensityVal">92%</span>
+        <input id="gradeIntensity" type="range" min="0" max="100" value="92">
       </label>
     </section>
     <section>
@@ -66,9 +66,9 @@
         <label><input id="stPalm" type="checkbox"> Palm</label>
       </div>
     </section>
-    <section>
+    <section id="panelSection">
       <h2>7 · Panel crop</h2>
-      <p id="panelHint" class="hint">Click a panel on the cover to crop it: drag to move, scroll to zoom.</p>
+      <p id="panelHint" class="hint">Click a panel on the cover to crop it: drag to move, scroll to zoom. Faces stay whole.</p>
       <div id="panelControls" hidden>
         <p id="panelLabel" class="hint"></p>
         <label>Photo<select id="panelPhoto"></select></label>
@@ -79,7 +79,7 @@
       </div>
     </section>
     </div>
-    <div class="rail-track" id="railTrack"><div class="rail-thumb" id="railThumb"></div></div>
+    <div class="rail-track" id="railTrack" title="Drag to scroll the controls"><div class="rail-thumb" id="railThumb"></div></div>
     </div>
     <section class="export-section">
       <h2>8 · Export</h2>

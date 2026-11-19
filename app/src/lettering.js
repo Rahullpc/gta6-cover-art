@@ -1,8 +1,9 @@
-// The caption lettering: a giant ALL-CAPS comic title plus a sub-caption.
-// White by default with a thick black outline and a magenta/cyan double
-// drop-shadow. The title auto-shrinks and wraps to at most two balanced
-// lines inside a safe margin, and it is painted LAST so it bleeds across
-// panel borders without ever being covered by them.
+// lettering.js — the giant comic caption: an ALL-CAPS display title plus a
+// sub-caption. White by default with a fat black outline and a magenta/cyan
+// double drop-shadow. The title auto-shrinks and wraps to at most two balanced
+// lines inside a safe margin, and is painted LAST so it bleeds across panel
+// borders without ever being covered by them. v2 keeps the same guarantees
+// (no overflow, no clipped words) with a slightly tighter skew and shadow.
 
 const DISPLAY = '"Vice Display", "Arial Black", sans-serif';
 
@@ -31,7 +32,7 @@ function fillFor(ctx, id, yTop, yBottom) {
   return TITLE_COLORS.find((c) => c.id === id)?.swatch ?? '#FFFFFF';
 }
 
-/** Break a long title into two balanced lines at the space nearest the middle. */
+// Split a long title into two balanced lines at the space nearest the middle.
 function balancedSplit(text) {
   const words = text.split(/\s+/).filter(Boolean);
   if (words.length < 2) return [text];
@@ -48,7 +49,7 @@ function balancedSplit(text) {
   return [words.slice(0, cut).join(' '), words.slice(cut).join(' ')];
 }
 
-/** Shrink the point size until one line (or two balanced lines) fits maxW. */
+// Shrink the point size until one line (or two balanced lines) fits maxW.
 function fitTitle(ctx, text, maxW, startPx, minPx) {
   const options = [[text], balancedSplit(text)];
   let px = startPx;
@@ -63,7 +64,7 @@ function fitTitle(ctx, text, maxW, startPx, minPx) {
   return { lines: options[1], px: minPx };
 }
 
-/** One title line: magenta + cyan hard shadows, fat black outline, bold fill. */
+// One title line: cyan + magenta hard shadows, fat black outline, bold fill.
 function paintLine(ctx, line, cx, y, px, fill) {
   ctx.save();
   ctx.textAlign = 'center';
@@ -83,9 +84,9 @@ function paintLine(ctx, line, cx, y, px, fill) {
 }
 
 /**
- * Draw the whole caption block. `state.titlePos` is top / center / bottom;
- * the block is centered horizontally with a slight poster skew, and kept
- * inside a safe margin so nothing clips at the cover edge.
+ * Draw the whole caption block. state.titlePos is top / center / bottom; the
+ * block is centred horizontally with a slight poster skew and kept inside a
+ * safe margin so nothing clips at the cover edge.
  */
 export function drawCaption(ctx, state, w, h) {
   const title = (state.title ?? '').trim().toUpperCase();
@@ -97,7 +98,7 @@ export function drawCaption(ctx, state, w, h) {
   const minPx = h * 0.05;
   const fitted = title ? fitTitle(ctx, title, maxW, startPx, minPx) : { lines: [], px: startPx * 0.4 };
   const px = fitted.px;
-  const lineH = px * 1.0;
+  const lineH = px;
   const subPx = Math.max(h * 0.028, px * 0.24);
   const subGap = px * 0.28;
   const blockH = fitted.lines.length * lineH + (sub ? subGap + subPx : 0);
@@ -110,7 +111,7 @@ export function drawCaption(ctx, state, w, h) {
 
   ctx.save();
   ctx.translate(w / 2, centerY);
-  ctx.transform(1, 0, -0.085, 1, 0, 0);
+  ctx.transform(1, 0, -0.08, 1, 0, 0);
   ctx.translate(-w / 2, -centerY);
 
   const firstBaseline = centerY - blockH / 2 + px * 0.82;
