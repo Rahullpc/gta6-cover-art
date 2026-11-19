@@ -1,3 +1,5 @@
+// GTA 6 Cover Art v1 — multi-panel cover maker (gta6-cover-art-01): Vice Cover Studio turns
+// 1-5 photos + a caption into a GTA-style comic cover and exports PNG in three post sizes.
 // A working gta6-cover-art-01 entry (Node 22, standard library only): the app is this directory's app/ folder, plain
 // static files a desktop browser loads offline (app/index.html and its ES modules, no library and no network
 // request), and the program hands it in. It copies app/ and screenshots/ from beside this file to /output and writes

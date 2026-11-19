@@ -3,20 +3,95 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cover Snap</title>
+<title>Vice Cover Studio — GTA-style cover maker</title>
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
+<header class="topbar">
+  <h1>VICE COVER STUDIO</h1>
+  <p class="tag">GTA-style multi-panel cover maker · 100% offline · photos never leave this machine</p>
+</header>
 <main class="app">
-  <section class="controls">
-    <h1>Cover Snap</h1>
-    <p>A photo and a caption, made into a square cover.</p>
-    <label>Photo <input id="photo" type="file" accept="image/*"></label>
-    <label>Caption <input id="caption" type="text" maxlength="40" value="Sunset Heist"></label>
-    <button id="export" type="button">Export PNG 1080 x 1080</button>
-    <p id="status" role="status"></p>
+  <aside class="rail">
+    <div class="rail-scroll-wrap">
+    <div class="rail-scroll">
+    <section>
+      <h2>1 · Photos <span id="photoCount" class="count">0/5</span></h2>
+      <div id="dropZone" class="drop">
+        <p>Drop 1–5 photos here</p>
+        <div class="drop-btns">
+          <label class="file-label">Choose files<input id="fileInput" type="file" accept="image/*" multiple hidden></label>
+          <button id="samplesBtn" type="button" class="ghost">Load samples</button>
+        </div>
+      </div>
+      <ul id="photoList" class="thumbs"></ul>
+    </section>
+    <section>
+      <h2>2 · One-click concepts</h2>
+      <div id="presetRow" class="preset-row"></div>
+    </section>
+    <section>
+      <h2>3 · Layout</h2>
+      <div id="layoutRow" class="layout-row"></div>
+    </section>
+    <section>
+      <h2>4 · Colour grade</h2>
+      <div id="gradeRow" class="grade-row"></div>
+      <label class="slider">Intensity <span id="gradeIntensityVal">90%</span>
+        <input id="gradeIntensity" type="range" min="0" max="100" value="90">
+      </label>
+    </section>
+    <section>
+      <h2>5 · Caption</h2>
+      <label>Title<input id="titleInput" type="text" maxlength="48" value="SUNSET HEIST"></label>
+      <label>Sub-caption<input id="subInput" type="text" maxlength="60" value="A VICE CITY STORY"></label>
+      <div class="row">
+        <label>Position<select id="titlePos">
+          <option value="top">Top</option>
+          <option value="center">Center</option>
+          <option value="bottom" selected>Bottom</option>
+        </select></label>
+        <label class="slider">Size <span id="titleSizeVal">100%</span>
+          <input id="titleSize" type="range" min="50" max="140" value="100">
+        </label>
+      </div>
+      <div class="row"><span class="mini-label">Colour</span><div id="colorRow" class="color-row"></div></div>
+    </section>
+    <section>
+      <h2>6 · Stickers</h2>
+      <div class="checks">
+        <label><input id="stViceCity" type="checkbox" checked> VICE CITY</label>
+        <label><input id="stLeonida" type="checkbox"> LEONIDA</label>
+        <label><input id="stStars" type="checkbox" checked> Stars</label>
+        <label><input id="stPalm" type="checkbox"> Palm</label>
+      </div>
+    </section>
+    <section>
+      <h2>7 · Panel crop</h2>
+      <p id="panelHint" class="hint">Click a panel on the cover to crop it: drag to move, scroll to zoom.</p>
+      <div id="panelControls" hidden>
+        <p id="panelLabel" class="hint"></p>
+        <label>Photo<select id="panelPhoto"></select></label>
+        <label class="slider">Zoom <span id="panelZoomVal">1.00×</span>
+          <input id="panelZoom" type="range" min="100" max="400" value="100">
+        </label>
+        <button id="panelReset" type="button" class="ghost">Reset crop</button>
+      </div>
+    </section>
+    </div>
+    <div class="rail-track" id="railTrack"><div class="rail-thumb" id="railThumb"></div></div>
+    </div>
+    <section class="export-section">
+      <h2>8 · Export</h2>
+      <div class="row"><span class="mini-label">Preview size</span><div id="sizeRow" class="size-row"></div></div>
+      <div id="exportRow" class="export-row"></div>
+      <button id="exportAll" type="button" class="primary">Export all 3 PNGs</button>
+    </section>
+  </aside>
+  <section class="stage">
+    <div id="canvasWrap" class="canvas-wrap"><canvas id="preview" aria-label="Live cover preview"></canvas></div>
+    <p class="stage-bar"><span id="stageInfo"></span><span id="status" role="status"></span></p>
   </section>
-  <canvas id="cover" width="1080" height="1080" aria-label="The cover"></canvas>
 </main>
 <script type="module" src="./src/main.js"></script>
 </body>

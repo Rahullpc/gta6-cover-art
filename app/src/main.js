@@ -1,51 +1,35 @@
-// Wires the page: pick a photo, type a caption, export the square cover as a PNG. A `?shot=` query sets up a fixed
-// scene for a screenshot instead (./shots.js).
-import { drawCover } from './cover.js';
+// Boot Vice Cover Studio: create the state, wire the editor, wait for the
+// bundled display font, then either run a ?shot= screenshot scene or load the
+// sample photos with the default concept so the first paint is a full cover.
+
+import { createState, applyPreset, presetById } from './state.js';
+import { initEditor } from './editor.js';
 import { runShot } from './shots.js';
+import { renderToCanvas } from './cover.js';
+import { exportDataURL } from './export.js';
 
-const canvas = document.getElementById('cover');
-const caption = document.getElementById('caption');
-const status = document.getElementById('status');
-let photo = null;
+const state = createState();
+const editor = initEditor(state);
 
-function redraw() {
-  drawCover(canvas, photo, caption.value);
+// The bundled OFL display font must be ready before the first lettering pass.
+try {
+  await document.fonts.load('900 80px "Vice Display"');
+  await document.fonts.ready;
+} catch {
+  // Canvas lettering falls back to Arial Black / sans-serif if the font fails.
 }
 
-/** Loads an image from a URL, resolving to the image once it can be drawn. */
-export function loadImage(url) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = url;
-  });
-}
-
-document.getElementById('photo').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  photo = await loadImage(URL.createObjectURL(file));
-  redraw();
-});
-caption.addEventListener('input', redraw);
-document.getElementById('export').addEventListener('click', () => {
-  canvas.toBlob((blob) => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'cover-1080x1080.png';
-    a.click();
-    status.textContent = 'Saved cover-1080x1080.png';
-  }, 'image/png');
-});
-
-const shot = new URLSearchParams(location.search).get('shot');
-if (shot) {
-  runShot(shot, new URLSearchParams(location.search), async (sample, text) => {
-    photo = await loadImage(sample);
-    caption.value = text;
-    redraw();
-  });
+const params = new URLSearchParams(location.search);
+if (params.get('shot')) {
+  await runShot(params, { state, editor, renderToCanvas });
 } else {
-  redraw();
+  const preset = presetById('sunset-heist');
+  await editor.loadSamples(preset.photos);
+  applyPreset(state, preset);
+  editor.syncControls();
+  editor.requestRender();
+  editor.setStatus('2 sample photos + Sunset Beach Heist loaded. Upload your own, or hit a concept.');
 }
+
+// Test hook: the live state and the exact export render path.
+window.__viceCover = { state, editor, renderToCanvas, exportDataURL };
