@@ -1,5 +1,5 @@
 // cover.js — the single renderer behind the live preview AND the PNG export
-// (v5). One code path, one set of seeded canvas calls: what the editor shows is
+// (v6). One code path, one set of seeded canvas calls: what the editor shows is
 // exactly what the export writes.
 //
 // Pipeline: panels (face-safe photo via framing.js + bold grade + scene action
@@ -8,12 +8,15 @@
 // engine guarantees each panel shows a whole face or none; this renderer just
 // draws the frame it is handed.
 //
-// v5 art direction: the retro synthwave sun is gone from every day-grade sky.
-// heroArt and skylineArt no longer call any sun painter — the sky shows the
-// graded photo underneath, with birds / plane / skyline / palms still inked on
-// top. Night grades keep their moon and sparkles exactly as before. The other
-// v4 change holds: Sunset Hero's bottom strip is beach + street (no car panel),
-// while the car scene art still serves every layout that carries a car slot.
+// v6 art direction: the black city-skyline silhouette is gone from every
+// cover. skylineArt no longer calls any tower painter — a skyline panel keeps
+// its graded face-safe photo plus the remaining sky art (night: sparkles;
+// day: birds and the prop plane), and the area below the face simply shows the
+// photo/grade underneath. No replacement element was added. The v5 direction
+// holds: no retro synthwave sun in any day sky, the night moon untouched, and
+// the five-star wanted row under the VICE CITY badge. The v4 change holds too:
+// Sunset Hero's bottom strip is beach + street (no car panel), while the car
+// scene art still serves every layout that carries a car slot.
 
 import { layoutById } from './layouts.js';
 import { gradeById, paintGrade } from './grades.js';
@@ -21,7 +24,7 @@ import { activeEdits, clamp, sizeById } from './state.js';
 import { computeFrame, focusOf } from './framing.js';
 import { drawCaption } from './lettering.js';
 import {
-  drawMoon, drawStars, drawPalm, drawBirds, drawPlane, drawSkyline,
+  drawMoon, drawStars, drawPalm, drawBirds, drawPlane,
   drawCar, drawBeachScene, drawStreetScene, drawVignette, drawMoney,
   drawHalftone, drawPanelHalftone, drawGrain, drawPanelBorders,
   stickerViceCity, stickerLeonida, stickerStars, stickerPalm, drawPlaceholder,
@@ -57,8 +60,9 @@ function drawPanelPhoto(ctx, img, p, frame) {
 
 // The vector action inked over a panel's graded photo, dispatched by scene tag.
 // Faces sit in the upper third (framing.js), so scene action pins to the top
-// corners and the lower half — never across the face itself. v5: day skies are
-// sun-free; only birds, the plane, the skyline and palms remain up there.
+// corners and the lower half — never across the face itself. v6: skyline panels
+// carry only sky art (sparkles at night, birds + plane by day); the black tower
+// row is retired, so nothing is inked across the lower half of those panels.
 
 function heroArt(ctx, p, idx, night, m, seed) {
   if (night) {
@@ -74,9 +78,7 @@ function heroArt(ctx, p, idx, night, m, seed) {
 function skylineArt(ctx, p, idx, night, m, seed) {
   if (night) {
     drawStars(ctx, p.x + p.w * 0.05, p.y + p.h * 0.03, p.w * 0.9, p.h * 0.18, 7, seed + 4);
-    drawSkyline(ctx, p.x, p.y + p.h * 0.56, p.w, p.h * 0.44, seed);
   } else {
-    drawSkyline(ctx, p.x, p.y + p.h * 0.58, p.w, p.h * 0.42, seed);
     drawBirds(ctx, p.x + p.w * 0.4, p.y + p.h * 0.05, p.w * 0.4, p.h * 0.12, 3, seed + 2);
     drawPlane(ctx, p.x + p.w * 0.66, p.y + p.h * 0.12, m * 0.1);
   }

@@ -1,4 +1,4 @@
-// grades.js — six loud colour grades (v5; the look is unchanged from v2/v3/v4).
+// grades.js — six loud colour grades (v6; the look is unchanged from v2..v5).
 //
 // A grade is two things: a canvas filter string applied while the photo draws,
 // and an ordered stack of composite washes laid over the panel afterwards. `k`
@@ -12,8 +12,8 @@
 //
 // Each grade is declared as data (filter coefficients + wash steps in a compact
 // tagged shape) and run through one interpreter. The canvas calls — and
-// therefore the pixels — are identical to v4; v5's sun removal happens in the
-// scene layer above these washes, not here.
+// therefore the pixels — are identical to v4/v5; v6's skyline removal happens
+// in the scene layer above these washes, not here.
 
 // rgba() with the intensity baked into the alpha channel.
 const tint = (r, g, b, a, k) => `rgba(${r},${g},${b},${(a * k).toFixed(3)})`;

@@ -1,5 +1,5 @@
-// layouts.js — the poster tilings for Vice Cover Studio (v5, geometry unchanged
-// from v4).
+// layouts.js — the poster tilings for Vice Cover Studio (v6, geometry unchanged
+// from v4/v5).
 //
 // Every tiling obeys the same contract: panels cover the sheet exactly (shared
 // edge coordinates, so no gaps and no overlaps), the hero slot owns roughly
@@ -9,8 +9,9 @@
 // The v4 geometry holds: Sunset Hero's bottom strip is beach + street only
 // (weights 32:28, the old shares renormalised after the car panel was removed),
 // so the beach photo extends left into the freed space. Cinema keeps its
-// three-panel car/beach/street strip. v5 changes no coordinates — the star row
-// and the sun removal are renderer-side only.
+// three-panel car/beach/street strip. v6 changes no coordinates — the skyline
+// buildings were removed renderer-side; the `skyline` scene tag still marks
+// those panels, which now show only their graded photo plus sky art.
 //
 // Building blocks: a panel record, a weighted axis run, an uneven 2x2 story
 // block, and a fraction-table helper for the fixed compositions.

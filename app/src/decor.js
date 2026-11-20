@@ -1,17 +1,19 @@
-// decor.js — Vice Cover Studio's vector art layer (v5). Everything here is
+// decor.js — Vice Cover Studio's vector art layer (v6). Everything here is
 // deterministic Canvas 2D: a seeded mulberry32 stream drives each scatter, so
 // the editor preview and the exported PNG always agree pixel for pixel.
 //
 // The vocabulary: moon + sparkles for night skies, palms, birds, a prop plane,
-// a neon skyline, a sport car with tire smoke, a beach jetski, neon street
-// signs with a crowd, helicopter / money / police / duffel vignettes, halftone
-// dots, film grain, crisp comic borders and the sticker badges.
+// a sport car with tire smoke, a beach jetski, neon street signs with a crowd,
+// helicopter / money / police / duffel vignettes, halftone dots, film grain,
+// crisp comic borders and the sticker badges.
 //
-// v5 art direction: the striped synthwave sun is retired — day skies now show
-// only the photo/grade underneath plus birds, plane, skyline and palms. The
-// wanted-level sticker is a full five-star row (GTA's max heat), laid out as a
-// neat evenly spaced line under the VICE CITY badge instead of the old three-
-// star random scatter. The night moon is untouched.
+// v6 art direction: the black city-skyline silhouette is retired — the tower
+// painter and its roof/window/mast helpers are gone, so no cover inks a row of
+// black buildings anywhere. Skyline panels keep only their sky art (sparkles
+// at night, birds + plane by day) over the graded photo. The v5 direction
+// holds: no striped synthwave sun in day skies, and the wanted-level sticker
+// stays a full five-star row (GTA's max heat), laid out as a neat evenly
+// spaced line under the VICE CITY badge. The night moon is untouched.
 //
 // Drawing rules that keep the art face-safe and pixel-stable:
 //   * borders are straight and uniform; hero decor pins to corners / the lower
@@ -19,7 +21,7 @@
 //   * the halftone dot tile and the palm nuts each stay ONE path with two arcs
 //     and ONE fill — splitting them would shift anti-aliasing by a sub-pixel;
 //   * every bezier control point and rnd() consumption order is preserved from
-//     v4, so unchanged regions render identically.
+//     v4/v5, so unchanged regions render identically.
 
 const INK = '#0D001A';
 const DISPLAY = '"Vice Display", "Arial Black", sans-serif';
@@ -238,80 +240,6 @@ export function drawPlane(ctx, cx, cy, s, tilt = -0.08) {
     c.lineTo(tail[1][0], tail[1][1]);
     c.lineTo(tail[2][0], tail[2][1]);
   });
-  ctx.restore();
-}
-
-/* --------------------------------------------------------------- skyline */
-
-// Glowing roofline along a tower top.
-function towerRoof(c, bx, topY, bw, h, neon) {
-  c.save();
-  c.shadowColor = neon;
-  c.shadowBlur = h * 0.04;
-  c.lineWidth = Math.max(1.5, h * 0.012);
-  c.globalAlpha = 0.9;
-  c.strokeStyle = neon;
-  strokeSeg(c, bx, topY, bx + bw, topY);
-  c.restore();
-}
-
-// Lit windows on a loose grid. The grid is laid out first (no randomness),
-// then each cell consumes the same one-or-two rnd() calls as v3/v4.
-function towerWindows(c, rnd, bx, topY, bw, baseY, h, neon) {
-  const step = Math.max(4, h * 0.035);
-  const rows = [];
-  for (let wy = topY + step; wy < baseY - step * 0.5; wy += step) rows.push(wy);
-  const cols = [];
-  for (let wx = bx + step * 0.6; wx < bx + bw - step * 0.4; wx += step) cols.push(wx);
-  c.fillStyle = neon;
-  for (const wy of rows) {
-    for (const wx of cols) {
-      if (rnd() < 0.4) {
-        c.globalAlpha = 0.45 + rnd() * 0.45;
-        fillBox(c, wx, wy, step * 0.32, step * 0.32);
-      }
-    }
-  }
-  c.globalAlpha = 1;
-}
-
-// Occasional antenna mast with a gold beacon.
-function towerMast(c, rnd, bx, topY, bw, h) {
-  if (rnd() >= 0.28) return;
-  const mastX = bx + bw * 0.5;
-  const mastY = topY - h * 0.12;
-  c.lineWidth = Math.max(1, h * 0.008);
-  c.strokeStyle = '#FF6EC7';
-  strokeSeg(c, mastX, topY, mastX, mastY);
-  c.fillStyle = '#FFD60A';
-  fillDisc(c, mastX, mastY, Math.max(1.5, h * 0.012));
-}
-
-// One tower's random dimensions, consuming rnd in the established order.
-function nextTower(rnd, w, h) {
-  const bw = w * (0.06 + rnd() * 0.07);
-  const rawH = h * (0.25 + rnd() * 0.55);
-  const bh = Math.min(rawH, bw * 5);
-  const neon = rnd() > 0.5 ? '#FF2E88' : '#00E5FF';
-  return { bw, bh, neon };
-}
-
-/** Neon towers rising from a region's bottom edge: roofs, windows, masts. */
-export function drawSkyline(ctx, x, y, w, h, seed) {
-  const rnd = rng(seed);
-  const baseY = y + h;
-  ctx.save();
-  let bx = x - w * 0.02;
-  while (bx < x + w) {
-    const t = nextTower(rnd, w, h);
-    const topY = baseY - t.bh;
-    ctx.fillStyle = INK;
-    fillBox(ctx, bx, topY, t.bw, t.bh);
-    towerRoof(ctx, bx, topY, t.bw, h, t.neon);
-    towerWindows(ctx, rnd, bx, topY, t.bw, baseY, h, t.neon);
-    towerMast(ctx, rnd, bx, topY, t.bw, h);
-    bx += t.bw + w * 0.008;
-  }
   ctx.restore();
 }
 

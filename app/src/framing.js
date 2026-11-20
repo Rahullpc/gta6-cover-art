@@ -1,5 +1,5 @@
-// framing.js — the face-safe crop kernel (v5; the geometry is unchanged from
-// v3/v4, only the surrounding prose is new).
+// framing.js — the face-safe crop kernel (v6; the geometry is unchanged from
+// v3/v4/v5, only the surrounding prose is new).
 //
 // One rule governs every panel: a head is either fully on screen or fully off
 // it — a half-sliced face is never a legal result. The kernel knows where each
@@ -17,8 +17,9 @@
 //
 // The math is pure image-pixel geometry; the renderer draws the returned frame
 // and the editor inverts it for dragging, keeping preview, drag and export in
-// sync. Every numeric expression below is identical to v4, so every frame —
-// and therefore every pixel of every photo — is unchanged in v5.
+// sync. Every numeric expression below is identical to v4/v5, so every frame —
+// and therefore every pixel of every photo — is unchanged in v6 (the skyline
+// removal is renderer-side only).
 
 export function clamp(value, lo, hi) {
   return Math.min(hi, Math.max(lo, value));
@@ -147,7 +148,7 @@ function headRect(img, focus) {
 }
 
 // Where the head sits in a panel: upper third, leaving the lower two-thirds for
-// scene action (skyline, car, crowd, sea) clear of the face.
+// scene action (car, crowd, sea, sky) clear of the face.
 function anchorFor(panel) {
   const ay = panel.hero ? 0.34 : 0.32;
   return { ax: 0.5, ay };

@@ -1,4 +1,4 @@
-// state.js — the shared cover state and the four one-click concepts (v5).
+// state.js — the shared cover state and the four one-click concepts (v6).
 //
 // A concept is the two-click path from photo to finished cover: load the sample
 // roll (only when the user has none of their own), then set layout, grade,
@@ -9,11 +9,12 @@
 // putting the face fully OUT of frame rather than half-cut. Every panel shows
 // either a complete face or pure scenery.
 //
-// v5 changes no state data: the two art fixes (five wanted stars, no sunset
-// sun) live entirely in decor.js / cover.js. The v4 geometry holds — Sunset
-// Beach Heist tiles five slots (hero, skyline, vignette, beach, street) with no
-// car panel, and the crop cache still regenerates stale lists whose length no
-// longer matches the tiling.
+// v6 changes no state data: the skyline-buildings removal lives entirely in
+// decor.js / cover.js (the `skyline` scene tag still marks the same panels).
+// The v5 fixes hold — five wanted stars, no sunset sun — and the v4 geometry
+// holds too: Sunset Beach Heist tiles five slots (hero, skyline, vignette,
+// beach, street) with no car panel, and the crop cache still regenerates stale
+// lists whose length no longer matches the tiling.
 
 import { defaultEdits, layoutById } from './layouts.js';
 import { clamp } from './framing.js';
@@ -82,6 +83,8 @@ export const PRESETS = [
     // summer owns the hero; porsche's small head takes a tight vignette zoom.
     // No car crop (v4); beach (summer) fills the wider left slot. v5: the sky
     // above the hero no longer carries a sun, and the badge gets five stars.
+    // v6: the skyline panel under the pier man's face shows only the graded
+    // photo — the black tower row is gone.
     crops: cropList([
       ['face', 2, 1.6, -0.3, 0],
       ['face', 1, 1.28, -0.25, 0],
@@ -106,6 +109,8 @@ export const PRESETS = [
     // grade + hero/skyline are v2's; porsche rides the top-right vignette (row 1,
     // safe from the bottom title) at a zoom that keeps its face readable.
     // v5: the night moon stays; the wanted row below the badge is now five.
+    // v6: the top-centre skyline panel keeps its sparkles over the graded photo
+    // — no black buildings under the face.
     crops: cropList([
       ['face', 0, 1.08],
       ['face', 1, 1.28, -0.25, 0],
@@ -129,7 +134,7 @@ export const PRESETS = [
     // five-vert columns: beach, car, hero, street, skyline. summer takes the beach
     // + hero columns, porsche the street column (tight), boulevard the car, pier
     // the skyline. Every face sits in the upper third, clear of the title.
-    // stars:false here — no yellow cluster on this cover (unchanged in v5).
+    // stars:false here — no yellow cluster on this cover (unchanged in v5/v6).
     crops: cropList([
       ['face', 0, 1],
       ['face', 2, 1.2],
@@ -154,6 +159,7 @@ export const PRESETS = [
     // tall vignette (props live in the lower half); summer's pool is the beach beat.
     // v5 side effect (accepted): stars:true means this cover also gets the
     // five-star row, and its day sky loses the sun like every other non-night grade.
+    // v6: its skyline panel loses the black towers like every other layout.
     crops: cropList([
       ['face', 0, 1.05],
       ['face', 1, 1.24, -0.3, 0],
