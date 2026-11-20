@@ -3,64 +3,91 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Cover Studio — GTA-style cover art maker</title>
+<title>Vice Cover Studio — GTA 6-style cover art maker</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand">VICE COVER STUDIO</div>
-  <div class="tagline">Turn your photos into a GTA-style comic cover · face-safe framing · runs 100% offline · photos stay on this machine</div>
+  <h1><span class="logo-vice">VICE</span> <span class="logo-cover">COVER STUDIO</span></h1>
+  <p class="tagline">Turn your photos into a GTA-style comic cover · face-safe framing · runs 100% offline · photos stay on this machine</p>
 </header>
-<div class="workspace">
+
+<main class="studio">
   <aside class="sidebar">
     <section class="panel">
-      <h2><span class="num">1</span> YOUR PHOTOS <span id="photo-count" class="count">4/5</span></h2>
-      <div class="dropzone">Drag &amp; drop 1–5 photos here</div>
+      <h2><span class="step">1</span> YOUR PHOTOS <span class="count" id="photo-count">0/5</span></h2>
+      <div class="drop-zone" id="drop-zone">Drag &amp; drop 1–5 photos here</div>
       <div class="row">
         <button class="btn" id="browse-btn">Browse files</button>
-        <button class="btn" id="use-samples">Use samples</button>
+        <button class="btn" id="samples-btn">Use samples</button>
       </div>
-      <div id="thumbs" class="thumbs"></div>
+      <input type="file" id="photo-input" accept="image/*" multiple hidden>
+      <div class="photo-list" id="photo-list"></div>
     </section>
+
     <section class="panel">
-      <h2><span class="num">2</span> ONE-CLICK CONCEPTS</h2>
-      <div id="concept-btns" class="chips"></div>
+      <h2><span class="step">2</span> ONE-CLICK CONCEPTS</h2>
+      <div class="grid-2">
+        <button class="btn concept active" data-concept="sunset">Sunset Beach Heist</button>
+        <button class="btn concept" data-concept="neon">Neon Night Drive</button>
+        <button class="btn concept" data-concept="strip">Vice Strip</button>
+        <button class="btn concept" data-concept="duo">Golden Hour Duo</button>
+      </div>
     </section>
+
     <section class="panel">
-      <h2><span class="num">3</span> PANEL LAYOUT</h2>
-      <div id="layout-btns" class="layouts"></div>
+      <h2><span class="step">3</span> PANEL LAYOUT</h2>
+      <div class="grid-3">
+        <button class="btn layout active" data-layout="sunset-hero"><span class="mini m-hero"></span>Sunset Hero</button>
+        <button class="btn layout" data-layout="grid-hero"><span class="mini m-gridhero"></span>Grid + Hero</button>
+        <button class="btn layout" data-layout="vice-strip"><span class="mini m-strip"></span>Vice Strip</button>
+        <button class="btn layout" data-layout="triptych"><span class="mini m-trip"></span>Triptych</button>
+        <button class="btn layout" data-layout="comic-quad"><span class="mini m-quad"></span>Comic Quad</button>
+        <button class="btn layout" data-layout="cinema-strip"><span class="mini m-cinema"></span>Cinema Strip</button>
+      </div>
     </section>
+
     <section class="panel">
-      <h2><span class="num">4</span> COLOUR GRADE</h2>
-      <div id="grade-swatches" class="swatches"></div>
+      <h2><span class="step">4</span> COLOUR GRADE</h2>
+      <div class="grade-row">
+        <button class="btn grade active" data-grade="sunset" style="--g1:#FF7A18;--g2:#FF2E88">Sunset</button>
+        <button class="btn grade" data-grade="neon" style="--g1:#062A3D;--g2:#00F0FF">Neon Night</button>
+        <button class="btn grade" data-grade="golden" style="--g1:#FFB43C;--g2:#FF7A18">Golden Hour</button>
+        <button class="btn grade" data-grade="vice" style="--g1:#FF2E88;--g2:#B4288C">Vice Pink</button>
+        <button class="btn grade" data-grade="teal" style="--g1:#04283C;--g2:#007A8C">Teal Noir</button>
+      </div>
+      <label class="slider-label">Grade intensity <input type="range" id="grade-intensity" min="0" max="100" value="100"></label>
     </section>
+
     <section class="panel">
-      <h2><span class="num">5</span> CAPTION</h2>
-      <label class="field">Title
-        <input id="cap-title" type="text" value="SUNSET HEIST" maxlength="40">
-      </label>
-      <label class="field">Subtitle
-        <input id="cap-sub" type="text" value="A VICE CITY STORY" maxlength="40">
-      </label>
+      <h2><span class="step">5</span> CAPTION</h2>
+      <label class="field">Title <input type="text" id="caption-title" value="SUNSET HEIST" maxlength="24"></label>
+      <label class="field">Sub-caption <input type="text" id="caption-sub" value="A VICE CITY STORY" maxlength="40"></label>
     </section>
+
     <section class="panel">
-      <h2><span class="num">6</span> EXPORT</h2>
-      <div id="size-btns" class="chips"></div>
-      <button class="btn primary" id="export-btn">Export PNG</button>
-      <p class="hint">Exports the current cover as a PNG. Sample photos loaded — click any panel to crop, then export.</p>
+      <h2><span class="step">6</span> EXPORT PNG</h2>
+      <div class="grid-3">
+        <button class="btn export" data-export="1080x1080">1080 × 1080</button>
+        <button class="btn export" data-export="1080x1350">1080 × 1350</button>
+        <button class="btn export" data-export="1920x1080">1920 × 1080</button>
+      </div>
+      <button class="btn primary" id="export-all">Export all three sizes</button>
     </section>
   </aside>
-  <main class="stage">
+
+  <section class="stage">
     <div class="canvas-wrap">
       <span class="panel-tag">PANEL 1</span>
-      <canvas id="preview" width="960" height="540"></canvas>
+      <canvas id="preview" width="1280" height="720"></canvas>
     </div>
-    <div class="statusbar">
-      <span id="status">1920 × 1080 · Sunset Hero · Sunset Beach Heist · 4 photos</span>
-      <span class="status-right">Sample photos loaded — click any panel to crop, then export.</span>
-    </div>
-  </main>
-</div>
-<script type="module" src="src/main.js"></script>
+    <footer class="stage-foot">
+      <span id="size-info">1920 × 1080 · Sunset Hero · Sunset · 4 photos</span>
+      <span class="hint">Sample photos loaded — click any panel to crop, then export.</span>
+    </footer>
+  </section>
+</main>
+
+<script type="module" src="src/boot.js"></script>
 </body>
 </html>

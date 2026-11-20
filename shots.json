@@ -1,1 +1,1 @@
-[{"h":1080,"name":"1-cover.jpg","query":"?shot=1&w=1920&h=1080","w":1920},{"h":720,"name":"2-editor.jpg","query":"?shot=2&w=1280&h=720","w":1280},{"h":1350,"name":"3-cover.jpg","query":"?shot=3&w=1080&h=1350","w":1080},{"h":1080,"name":"4-cover.jpg","query":"?shot=4&w=1920&h=1080","w":1920}]
+{"shots":[{"height":720,"name":"1-cover","recipe":"sunset","width":1280},{"height":720,"name":"2-editor","view":"editor","width":1280},{"height":1280,"name":"3-cover","recipe":"strip","width":1024},{"height":720,"name":"4-cover","recipe":"neon","width":1280}]}

@@ -1,77 +1,47 @@
-// serve.ts — a development static server for app/ (Node 22, stdlib only).
-// Usage: `node serve.ts [--port 8080]` then open http://localhost:8080.
-// It only reads files under app/, sends the right MIME type for each, and
-// never follows a path that climbs out of the folder. Nothing here is part
-// of the entry itself — the app is plain static files in app/.
-
-import { createReadStream, statSync } from 'node:fs';
+// GTA 6 Cover Art v29 — local static server for trying the app.
+// Serves app/ at the root on http://localhost:8080, and screenshots/
+// under /screenshots/. No build step, no network requests.
 import { createServer } from 'node:http';
-import { extname, join, normalize, resolve, sep } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = resolve(fileURLToPath(new URL('./app', import.meta.url)));
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)));
+const appDir = join(repoRoot, 'app');
+const port = Number(process.env.PORT ?? 8080);
 
-function mimeFor(path: string): string {
-  const table: Record<string, string> = {
-    '.html': 'text/html; charset=utf-8',
-    '.js': 'text/javascript; charset=utf-8',
-    '.mjs': 'text/javascript; charset=utf-8',
-    '.css': 'text/css; charset=utf-8',
-    '.json': 'application/json; charset=utf-8',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.webp': 'image/webp',
-    '.gif': 'image/gif',
-    '.svg': 'image/svg+xml',
-    '.ico': 'image/x-icon',
-    '.ttf': 'font/ttf',
-    '.otf': 'font/otf',
-    '.woff': 'font/woff',
-    '.woff2': 'font/woff2',
-    '.wasm': 'application/wasm',
-    '.txt': 'text/plain; charset=utf-8',
-  };
-  return table[extname(path).toLowerCase()] ?? 'application/octet-stream';
-}
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.ttf': 'font/ttf',
+  '.txt': 'text/plain; charset=utf-8',
+};
 
-function portFromArgs(): number {
-  const i = process.argv.indexOf('--port');
-  const n = i === -1 ? 8080 : Number(process.argv[i + 1]);
-  return Number.isInteger(n) && n > 0 && n < 65536 ? n : 8080;
-}
-
-const port = portFromArgs();
-
-createServer((req, res) => {
-  let path: string;
+const server = createServer(async (req, res) => {
   try {
-    path = decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname);
+    const url = new URL(req.url ?? '/', 'http://localhost');
+    let path = decodeURIComponent(url.pathname);
+    if (path === '/') path = '/index.html';
+    const base = path.startsWith('/screenshots/') ? repoRoot : appDir;
+    const file = resolve(join(base, normalize(path)));
+    if (!file.startsWith(base)) {
+      res.writeHead(403);
+      res.end('forbidden');
+      return;
+    }
+    const data = await readFile(file);
+    res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
+    res.end(data);
   } catch {
-    res.writeHead(400).end('bad request');
-    return;
+    res.writeHead(404);
+    res.end('not found');
   }
-  if (path.endsWith('/')) path += 'index.html';
-  const file = resolve(join(root, normalize(path)));
-  if (file !== root && !file.startsWith(root + sep)) {
-    res.writeHead(403).end('forbidden');
-    return;
-  }
-  let size: number;
-  try {
-    const st = statSync(file);
-    if (!st.isFile()) throw new Error('not a file');
-    size = st.size;
-  } catch {
-    res.writeHead(404).end('not found');
-    return;
-  }
-  res.writeHead(200, {
-    'content-type': mimeFor(file),
-    'content-length': size,
-    'cache-control': 'no-store',
-  });
-  createReadStream(file).pipe(res);
-}).listen(port, '127.0.0.1', () => {
-  console.log(`Vice Cover Studio is on http://localhost:${port}`);
 });
+
+server.listen(port, () => console.log(`Vice Cover Studio at http://localhost:${port}`));

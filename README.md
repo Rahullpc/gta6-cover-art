@@ -1,67 +1,51 @@
-# Vice Cover Studio — GTA-style cover art maker
+# Vice Cover Studio — GTA 6 Cover Art
 
-[![make.fun](https://make.fun/badge/gta6-cover-art-01.svg)](https://make.fun/competitions/gta6-cover-art-01)
-[![rank](https://make.fun/badge/gta6-cover-art-01/Rahullpc/gta6-cover-art/rank.svg)](https://make.fun/competitions/gta6-cover-art-01)
-[![reward](https://make.fun/badge/gta6-cover-art-01/Rahullpc/gta6-cover-art/reward.svg)](https://make.fun/competitions/gta6-cover-art-01)
+[![make.fun](https://make.fun/badge/gta6-cover-art-01.svg)](https://make.fun/c/gta6-cover-art-01)
+[![rank](https://make.fun/badge/gta6-cover-art-01/Rahullpc/gta6-cover-art/rank.svg)](https://make.fun/c/gta6-cover-art-01)
+[![reward](https://make.fun/badge/gta6-cover-art-01/Rahullpc/gta6-cover-art/reward.svg)](https://make.fun/c/gta6-cover-art-01)
 
-An offline web app that turns your photos and a caption into a GTA 6-style
-multi-panel comic cover — the Vice City neon-sunset poster look — and exports
-it as a PNG to share. No upload, no server, no watermark: the photos never
-leave your machine.
+An offline web app that turns your photos and a caption into GTA 6-style
+cover art — multi-panel posters, bold condensed lettering, Vice City sunset
+and neon grades — exported as PNG to share.
+
+Built for the [make.fun GTA 6 Cover Art bounty](https://make.fun/c/gta6-cover-art-01).
 
 ## What it does
 
-- **Load 1–5 photos** (drag & drop, browse, or use the four built-in samples).
-- **One-click concepts** — four ready-made covers: Sunset Beach Heist,
-  Neon Night Drive, Vice Strip and Golden Hour Duo.
-- **Panel layouts** — six arrangements (Sunset Hero, Grid + Hero, Vice Strip,
-  Triptych, Comic Quad, Cinema Strip) you can swap under any concept.
-- **Colour grades** — Sunset, Neon, Vice Pink and Golden washes.
-- **Caption** — edit the big title and the subtitle; the lettering is drawn
-  in the genre's style (condensed black capitals, white fill, black stroke,
-  cyan fringe).
-- **Face-safe framing** — every panel crops on a face anchor, so faces are
-  never cut off. A self-check reports 0 faces cut across all concepts and
-  sizes.
-- **Export** — PNG at 1080×1080, 1080×1350 or 1920×1080, one click.
+- Upload 1–5 of your own photos (file picker or drag & drop), or use the
+  four built-in samples.
+- Four one-click concepts: **Sunset Beach Heist**, **Neon Night Drive**,
+  **Vice Strip** (five vertical panels) and **Golden Hour Duo**.
+- Six panel layouts, five colour grades, editable two-line caption.
+- Face-safe framing: every panel's crop keeps faces inside the frame.
+- Export PNG in 1080 × 1080, 1080 × 1350 and 1920 × 1080, one click each
+  or all three at once.
+- Runs 100% offline from static files under `app/` — no network requests,
+  photos never leave your machine.
 
-## Run it
+## Try it
 
 ```sh
 node serve.ts
 # open http://localhost:8080
 ```
 
-No build step, no dependencies, no network request: `app/` is plain static
-files (ES modules, one local font, four sample photos).
+## Layout
 
-## Hand it in
+- `app/index.html` — the studio UI (sidebar controls + live preview).
+- `app/style.css` — dark studio theme.
+- `app/src/brush.js` — canvas primitives: badges, stars, lettering, palms,
+  crowd, cars, moon, halftone dots, blurred photo bands.
+- `app/src/framing.js` — focus-point cover crop + face-safe framing check.
+- `app/src/covers.js` — the four cover recipes and the layout list.
+- `app/src/studio.js` — editor state, preview, export.
+- `app/src/boot.js` — entry point + reproducible screenshot mode
+  (`?shot=1-cover|2-editor|3-cover|4-cover`).
+- `app/fonts/NotoSans-CondensedBlack.ttf` — OFL display font.
+- `app/samples/` — four free-to-use sample photos.
+- `main.ts` — copies `app/` + `screenshots/` to `/output` and writes the
+  dossier with the kit's `buildDossier`.
 
-```sh
-mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
-# writes out/dossier.json and copies app/ + screenshots/ into out/
-```
+## License
 
-## How it is built
-
-- `app/src/ink.js` — the drawing primitives: badge, stars, titles, pills,
-  palms, cars, moon, stickers.
-- `app/src/photos.js` — the sample-photo catalogue (face anchors), the
-  cover-crop solver and the photo painter.
-- `app/src/concepts.js` — the four cover recipes: panel layouts plus the
-  dressing (grade, badge, stars, title, decorations).
-- `app/src/studio.js` — the editor: state, live preview, export, shot mode.
-- `app/src/shots.js` — the four screenshot scenes.
-- `app/src/main.js` — bootstrap.
-
-## Screenshots
-
-| | |
-|---|---|
-| ![Sunset Hero cover](screenshots/1-cover.jpg) | ![Editor](screenshots/2-editor.jpg) |
-| ![Vice Strip cover](screenshots/3-cover.jpg) | ![Neon Night Drive cover](screenshots/4-cover.jpg) |
-
-## Licence
-
-MIT. The sample photos were made for make.fun and are free to use. No
-Rockstar logos, artwork or fonts are used anywhere.
+MIT — see [LICENSE](LICENSE).
