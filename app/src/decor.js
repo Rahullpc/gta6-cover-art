@@ -230,9 +230,10 @@ export function drawScene(ctx, tag, rect, night, seed, index) {
       for (let i = 0; i < 10; i++) {
         sparkle(ctx, x + w * (0.05 + rand() * 0.85), y + h * (0.02 + rand() * 0.16), s * (0.008 + rand() * 0.01));
       }
-    } else {
-      for (let i = 0; i < 4; i++) drawBird(ctx, x + w * (0.06 + i * 0.05 + rand() * 0.02), y + h * (0.05 + rand() * 0.04), s * 0.035);
     }
+    // NOTE: no daytime birds in the hero panel — a bird row here used to
+    // sit behind the VICE CITY badge and its wing-tips peeked out above
+    // the badge like cut-off letters. Birds live on in skyline/sea scenes.
     drawPalm(ctx, x + w * 0.06, y + h, h * 0.52, 0.14, false);
     drawMoneyBill(ctx, x + w * 0.86, y + h * 0.86, s * 0.075, 0.3);
     drawMoneyBill(ctx, x + w * 0.76, y + h * 0.92, s * 0.06, -0.4);
