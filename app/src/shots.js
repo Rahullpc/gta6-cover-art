@@ -1,61 +1,56 @@
-// shots.js — reproducible screenshot scenes driven by the URL query
-// string for Vice Cover Studio v26.
-// ?shot=cover|editor &preset=<concept> &size=<square|portrait|landscape>
-// &caption=<title> &sub=<subtitle> &photo=<sample>
-// Both scenes share one preparation step; two animation frames after the
-// paint, window.__shotReady flips true so a screenshot script can wait
-// on it.
+// Screenshot mode — drives the app from the URL so a screenshot run is
+// deterministic: ?shot=cover|editor&theme=<id>&size=<id>&w=<px>&h=<px>.
+// ?shot=cover hides every control and fills the viewport with the cover
+// alone; ?shot=editor shows the full editor with a photo loaded.
+// When the view is drawn, window.__viceReady is set for the driver.
 
-import { usePreset } from './state.js';
+import { SIZES, themeById } from './themes.js';
 
-export async function playShot(studio, ed, params) {
-  const preset = params.get('preset') || 'Sunset Beach Heist';
-  const size = params.get('size');
-  const caption = params.get('caption');
-  const sub = params.get('sub');
-  const extraPhoto = params.get('photo');
-  const shot = params.get('shot') || 'cover';
+export async function applyShotMode(editor, doc, win) {
+  const q = new URLSearchParams(win.location.search);
+  const shot = q.get('shot');
+  const themeId = q.get('theme');
+  const sizeId = q.get('size');
+  const w = Number(q.get('w') ?? 0);
+  const h = Number(q.get('h') ?? 0);
 
-  if (studio.photos.length === 0) await ed.loadSamples();
-  if (extraPhoto) {
-    const img = new Image();
-    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = `samples/${extraPhoto}.jpg`; });
-    studio.photos.push({ img, name: extraPhoto });
+  if (themeId) await editor.setTheme(themeId);
+  if (sizeId) {
+    const size = SIZES.find((s) => s.id === sizeId);
+    if (size) editor.state.size = size;
   }
-  usePreset(studio, preset);
-  if (size && ['square', 'portrait', 'landscape'].includes(size)) studio.size = size;
-  if (caption !== null) studio.title = caption;
-  if (sub !== null) studio.subtitle = sub;
-  studio.selected = -1;
-  ed.refreshThumbs(); ed.refreshCropUI();
+  editor.render();
 
   if (shot === 'cover') {
-    // Render the exported cover at the post size through the exact export
-    // path and blit it full-bleed onto the viewport canvas.
-    const { exportCanvas, SHEET_SIZES } = await import('./cover.js');
-    const sizeDef = SHEET_SIZES[studio.size];
-    const cover = exportCanvas(studio, studio.size);
-    const cv = ed.canvas;
-    const dpr = window.devicePixelRatio || 1;
-    const vw = window.innerWidth, vh = window.innerHeight;
-    cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
-    cv.style.width = vw + 'px'; cv.style.height = vh + 'px';
-    const g = cv.getContext('2d');
-    g.fillStyle = '#0D001A';
-    g.fillRect(0, 0, cv.width, cv.height);
-    const s = Math.min(cv.width / sizeDef.w, cv.height / sizeDef.h);
-    const dw = sizeDef.w * s, dh = sizeDef.h * s;
-    g.drawImage(cover, (cv.width - dw) / 2, (cv.height - dh) / 2, dw, dh);
-    document.body.classList.add('shot-cover');
-  } else {
-    // Editor scene: full editor, samples loaded, first panel selected.
-    studio.selected = 0;
-    ed.repaint();
-    ed.refreshCropUI();
-    ed.status('Sample photos loaded — click any panel to crop, then export.');
-    document.body.classList.add('shot-editor');
+    doc.body.classList.add('shot-cover');
+    const canvas = doc.getElementById('preview');
+    // Size the canvas to the requested shot box (or the viewport),
+    // keeping the cover's own aspect ratio.
+    const cw = w > 0 ? w : win.innerWidth;
+    const ch = h > 0 ? h : win.innerHeight;
+    const size = editor.state.size;
+    const s = Math.min(cw / size.w, ch / size.h);
+    const pw = Math.round(size.w * s);
+    const ph = Math.round(size.h * s);
+    canvas.width = pw;
+    canvas.height = ph;
+    canvas.style.width = `${pw}px`;
+    canvas.style.height = `${ph}px`;
+    const { drawCover } = await import('./render.js');
+    const { themeById: byId } = await import('./themes.js');
+    const theme = themeById(editor.state.theme.id);
+    const ctx = canvas.getContext('2d');
+    const st = editor.state;
+    drawCover(ctx, theme, st.img, {
+      title: st.title,
+      subtitle: st.subtitle,
+      tagline: st.tagline,
+      zoom: st.zoom,
+      panX: st.panX * (pw / size.w),
+      panY: st.panY * (ph / size.h),
+    }, pw, ph);
   }
 
-  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-  window.__shotReady = true;
+  win.__viceReady = true;
+  return shot;
 }
