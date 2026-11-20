@@ -1,71 +1,66 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Nights — Diagonal Split Cover Maker</title>
+<title>Vice Cover Studio — GTA-style cover art maker</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="top">
-  <div>
-    <h1>VICE NIGHTS</h1>
-    <p class="tag">Diagonal Split Cover Maker — foto + caption jadi poster ala GTA 6</p>
-  </div>
-  <p class="hint">Seret foto di kanvas untuk menggeser · semua diproses di mesinmu, tanpa upload</p>
+<header class="topbar">
+  <div class="brand">VICE COVER STUDIO</div>
+  <div class="tagline">Turn your photos into a GTA-style comic cover · face-safe framing · runs 100% offline · photos stay on this machine</div>
 </header>
-
-<main class="layout">
-  <section class="stage">
-    <canvas id="preview" width="760" height="760"></canvas>
-    <p id="status" class="status">Memuat…</p>
-  </section>
-
-  <aside class="panel">
-    <section>
-      <h2>Tema diagonal</h2>
-      <div id="themeRow" class="row"></div>
-      <p class="note">Setiap tema membelah poster dengan satu diagonal: satu sisi foto, satu sisi panel warna.</p>
+<div class="workspace">
+  <aside class="sidebar">
+    <section class="panel">
+      <h2><span class="num">1</span> YOUR PHOTOS <span id="photo-count" class="count">4/5</span></h2>
+      <div class="dropzone">Drag &amp; drop 1–5 photos here</div>
+      <div class="row">
+        <button class="btn" id="browse-btn">Browse files</button>
+        <button class="btn" id="use-samples">Use samples</button>
+      </div>
+      <div id="thumbs" class="thumbs"></div>
     </section>
-
-    <section>
-      <h2>Foto</h2>
-      <div id="photoRow" class="row"></div>
-      <label class="uploadBtn" for="upload">+ Upload foto sendiri</label>
-      <input id="upload" type="file" accept="image/*" hidden>
+    <section class="panel">
+      <h2><span class="num">2</span> ONE-CLICK CONCEPTS</h2>
+      <div id="concept-btns" class="chips"></div>
     </section>
-
-    <section>
-      <h2>Caption</h2>
-      <label>Judul
-        <input id="titleIn" type="text" maxlength="24" autocomplete="off">
+    <section class="panel">
+      <h2><span class="num">3</span> PANEL LAYOUT</h2>
+      <div id="layout-btns" class="layouts"></div>
+    </section>
+    <section class="panel">
+      <h2><span class="num">4</span> COLOUR GRADE</h2>
+      <div id="grade-swatches" class="swatches"></div>
+    </section>
+    <section class="panel">
+      <h2><span class="num">5</span> CAPTION</h2>
+      <label class="field">Title
+        <input id="cap-title" type="text" value="SUNSET HEIST" maxlength="40">
       </label>
-      <label>Subjudul
-        <input id="subIn" type="text" maxlength="40" autocomplete="off">
-      </label>
-      <label>Tagline
-        <input id="tagIn" type="text" maxlength="40" autocomplete="off">
+      <label class="field">Subtitle
+        <input id="cap-sub" type="text" value="A VICE CITY STORY" maxlength="40">
       </label>
     </section>
-
-    <section>
-      <h2>Posisi foto</h2>
-      <label class="slider">Zoom <span id="zoomVal">100%</span>
-        <input id="zoomIn" type="range" min="0.8" max="2" step="0.01" value="1">
-      </label>
-      <button id="resetBtn" type="button" class="ghost">Reset posisi</button>
+    <section class="panel">
+      <h2><span class="num">6</span> EXPORT</h2>
+      <div id="size-btns" class="chips"></div>
+      <button class="btn primary" id="export-btn">Export PNG</button>
+      <p class="hint">Exports the current cover as a PNG. Sample photos loaded — click any panel to crop, then export.</p>
     </section>
-
-    <section>
-      <h2>Ukuran export</h2>
-      <div id="sizeRow" class="row"></div>
-    </section>
-
-    <button id="exportBtn" type="button" class="primary">Export PNG</button>
-    <p class="note">PNG diekspor pada ukuran penuh yang dipilih. Font dan foto semuanya file lokal — aplikasi jalan offline.</p>
   </aside>
-</main>
-
+  <main class="stage">
+    <div class="canvas-wrap">
+      <span class="panel-tag">PANEL 1</span>
+      <canvas id="preview" width="960" height="540"></canvas>
+    </div>
+    <div class="statusbar">
+      <span id="status">1920 × 1080 · Sunset Hero · Sunset Beach Heist · 4 photos</span>
+      <span class="status-right">Sample photos loaded — click any panel to crop, then export.</span>
+    </div>
+  </main>
+</div>
 <script type="module" src="src/main.js"></script>
 </body>
 </html>

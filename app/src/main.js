@@ -1,28 +1,13 @@
-// Vice Nights boot — loads the display font, starts the editor, then
-// applies screenshot mode when the URL asks for it. The editor object
-// is exposed as window.__vice so an automated run can export and verify.
+// main.js — bootstrap: shot mode or the editor, whichever the URL asks for.
+import { bootEditor, runShotMode } from './studio.js';
 
-import { createEditor } from './editor.js';
-import { applyShotMode } from './shots.js';
-
-async function boot() {
-  const editor = createEditor(document);
-  window.__vice = editor;
-
-  // The condensed display face lives in app/fonts/; wait for it so the
-  // first render (and every screenshot) uses it, not a fallback.
-  try {
-    await document.fonts.load('900 100px "Vice Nights"');
-    await document.fonts.load('700 40px "Vice Nights"');
-    await document.fonts.ready;
-  } catch {
-    // A missing face still renders with the fallback stack.
+(async () => {
+  const params = new URLSearchParams(location.search);
+  if (params.get('shot')) {
+    // In shot mode the studio still needs the photos loaded first.
+    const { bootForShot } = await import('./studio.js');
+    await bootForShot();
+  } else {
+    await bootEditor();
   }
-
-  await editor.setTheme(editor.state.theme.id);
-  await applyShotMode(editor, document, window);
-  editor.render();
-  window.__viceReady = true;
-}
-
-boot();
+})();

@@ -1,56 +1,20 @@
-// Screenshot mode — drives the app from the URL so a screenshot run is
-// deterministic: ?shot=cover|editor&theme=<id>&size=<id>&w=<px>&h=<px>.
-// ?shot=cover hides every control and fills the viewport with the cover
-// alone; ?shot=editor shows the full editor with a photo loaded.
-// When the view is drawn, window.__viceReady is set for the driver.
+// shots.js — the four screenshot scenes the maker takes.
+// 1-cover: the Sunset Hero cover, 1920x1080.
+// 2-editor: the editor with a photo loaded, 1280x720.
+// 3-cover: the Vice Strip cover, 1080x1350.
+// 4-cover: the Neon Night Drive cover, 1920x1080.
+// Each scene is opened with ?shot=N; the page sets data-ready="1" once the
+// scene has painted, so the screenshot tool knows when to capture.
 
-import { SIZES, themeById } from './themes.js';
+export const SHOTS = [
+  { file: '1-cover.jpg', shot: '1', w: 1920, h: 1080, note: 'Sunset Hero cover' },
+  { file: '2-editor.jpg', shot: '2', w: 1280, h: 720, note: 'editor with photos loaded' },
+  { file: '3-cover.jpg', shot: '3', w: 1080, h: 1350, note: 'Vice Strip cover' },
+  { file: '4-cover.jpg', shot: '4', w: 1920, h: 1080, note: 'Neon Night Drive cover' },
+];
 
-export async function applyShotMode(editor, doc, win) {
-  const q = new URLSearchParams(win.location.search);
-  const shot = q.get('shot');
-  const themeId = q.get('theme');
-  const sizeId = q.get('size');
-  const w = Number(q.get('w') ?? 0);
-  const h = Number(q.get('h') ?? 0);
-
-  if (themeId) await editor.setTheme(themeId);
-  if (sizeId) {
-    const size = SIZES.find((s) => s.id === sizeId);
-    if (size) editor.state.size = size;
-  }
-  editor.render();
-
-  if (shot === 'cover') {
-    doc.body.classList.add('shot-cover');
-    const canvas = doc.getElementById('preview');
-    // Size the canvas to the requested shot box (or the viewport),
-    // keeping the cover's own aspect ratio.
-    const cw = w > 0 ? w : win.innerWidth;
-    const ch = h > 0 ? h : win.innerHeight;
-    const size = editor.state.size;
-    const s = Math.min(cw / size.w, ch / size.h);
-    const pw = Math.round(size.w * s);
-    const ph = Math.round(size.h * s);
-    canvas.width = pw;
-    canvas.height = ph;
-    canvas.style.width = `${pw}px`;
-    canvas.style.height = `${ph}px`;
-    const { drawCover } = await import('./render.js');
-    const { themeById: byId } = await import('./themes.js');
-    const theme = themeById(editor.state.theme.id);
-    const ctx = canvas.getContext('2d');
-    const st = editor.state;
-    drawCover(ctx, theme, st.img, {
-      title: st.title,
-      subtitle: st.subtitle,
-      tagline: st.tagline,
-      zoom: st.zoom,
-      panX: st.panX * (pw / size.w),
-      panY: st.panY * (ph / size.h),
-    }, pw, ph);
-  }
-
-  win.__viceReady = true;
-  return shot;
+export function shotUrl(shot, base = 'http://localhost:8080/') {
+  const s = SHOTS.find((x) => x.shot === String(shot));
+  if (!s) return base;
+  return `${base}?shot=${s.shot}&w=${s.w}&h=${s.h}`;
 }
