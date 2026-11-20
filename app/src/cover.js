@@ -1,22 +1,22 @@
 // cover.js — the single renderer behind the live preview and the PNG
-// export. One code path for both, so the saved file matches the editor
-// pixel for pixel.
+// export for Vice Cover Studio v26. One code path for both, so the saved
+// file matches the editor pixel for pixel.
 
-import { layoutPanels, layoutById } from './layouts.js';
-import { gradeById, paintWash } from './grades.js';
-import { drawScene, halftonePanel, halftoneCorners, grain,
-         viceCityBadge, leonidaBadge, starsRow, palmBadge, drawPalm } from './decor.js';
-import { paintTitle } from './lettering.js';
-import { computeFrame, resolveFocus, classifyFrame } from './framing.js';
-import { cloneState, applyConcept } from './state.js';
+import { panelRects, tilingById } from './layouts.js';
+import { tintById, applyWash } from './grades.js';
+import { sceneArt, dotPanel, dotCorners, filmGrain,
+         badgeVice, badgeLeonida, starRow, badgePalm, paintPalm } from './decor.js';
+import { paintCaption } from './lettering.js';
+import { frameFor, focusFor, verdictFor } from './framing.js';
+import { copyStudio, usePreset } from './state.js';
 
-export const SIZES = {
+export const SHEET_SIZES = {
   square: { id: 'square', name: 'Square', w: 1080, h: 1080 },
   portrait: { id: 'portrait', name: 'Portrait', w: 1080, h: 1350 },
   landscape: { id: 'landscape', name: 'Landscape', w: 1920, h: 1080 },
 };
 
-function drawPlaceholder(ctx, panel) {
+function paintEmpty(ctx, panel) {
   const { x, y, w, h } = panel;
   const g = ctx.createLinearGradient(x, y, x + w, y + h);
   g.addColorStop(0, '#3B0A5E'); g.addColorStop(1, '#FF2E88');
@@ -39,11 +39,11 @@ function drawPlaceholder(ctx, panel) {
   ctx.fillText('ADD PHOTO', x + w / 2, y + h / 2);
 }
 
-function drawPhoto(ctx, photo, panel, crop, grade, k) {
+function paintPhoto(ctx, photo, panel, crop, tint, k) {
   const { x, y, w, h } = panel;
   const img = photo.img;
-  const focus = resolveFocus(photo);
-  const frame = computeFrame(img, { w, h, tag: panel.tag }, crop, focus);
+  const focus = focusFor(photo);
+  const frame = frameFor(img, { w, h, tag: panel.tag }, crop, focus);
   ctx.save();
   ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
   if (frame.mode === 'blur') {
@@ -55,11 +55,11 @@ function drawPhoto(ctx, photo, panel, crop, grade, k) {
     ctx.fillStyle = 'rgba(13,0,26,0.35)';
     ctx.fillRect(x, y, w, h);
     const sh = frame.sharp;
-    ctx.filter = grade.filter(k);
+    ctx.filter = tint.filter(k);
     ctx.drawImage(img, x + sh.dx, y + sh.dy, sh.dw, sh.dh);
     ctx.filter = 'none';
   } else {
-    ctx.filter = grade.filter(k);
+    ctx.filter = tint.filter(k);
     ctx.drawImage(img,
       frame.sx * img.naturalWidth, frame.sy * img.naturalHeight,
       frame.sw * img.naturalWidth, frame.sh * img.naturalHeight,
@@ -70,13 +70,13 @@ function drawPhoto(ctx, photo, panel, crop, grade, k) {
   return frame;
 }
 
-export function renderCover(ctx, state, W, H, opts = {}) {
-  const size = SIZES[state.size] || SIZES.landscape;
-  const layout = layoutById(state.layout);
-  const panels = layoutPanels(layout, W, H);
-  const grade = gradeById(state.grade);
-  const k = state.intensity ?? 0.92;
-  const crops = state.cropsFor(state.layout);
+export function paintCover(ctx, studio, W, H, opts = {}) {
+  const size = SHEET_SIZES[studio.size] || SHEET_SIZES.landscape;
+  const tiling = tilingById(studio.layout);
+  const panels = panelRects(tiling, W, H);
+  const tint = tintById(studio.grade);
+  const k = studio.intensity ?? 0.92;
+  const crops = studio.cropsFor(studio.layout);
   const seed = 1234;
 
   ctx.clearRect(0, 0, W, H);
@@ -87,26 +87,26 @@ export function renderCover(ctx, state, W, H, opts = {}) {
   for (let i = 0; i < panels.length; i++) {
     const panel = panels[i];
     const crop = crops[i] || { photo: i, zoom: 1, panX: 0, panY: 0, kind: 'face' };
-    const photo = state.photos[crop.photo];
+    const photo = studio.photos[crop.photo];
     ctx.save();
     ctx.beginPath(); ctx.rect(panel.x, panel.y, panel.w, panel.h); ctx.clip();
     let frame = null;
     if (photo && photo.img) {
-      frame = drawPhoto(ctx, photo, panel, crop, grade, k);
+      frame = paintPhoto(ctx, photo, panel, crop, tint, k);
     } else {
-      drawPlaceholder(ctx, panel);
+      paintEmpty(ctx, panel);
     }
     frames.push(frame);
-    for (const wash of grade.washes) {
-      paintWash(ctx, wash, panel.x, panel.y, panel.w, panel.h, k);
+    for (const wash of tint.washes) {
+      applyWash(ctx, wash, panel.x, panel.y, panel.w, panel.h, k);
     }
-    drawScene(ctx, panel.tag, panel, grade.night, seed, i);
-    halftonePanel(ctx, panel.x, panel.y, panel.w, panel.h, 0.10);
+    sceneArt(ctx, panel.tag, panel, tint.night, seed, i);
+    dotPanel(ctx, panel.x, panel.y, panel.w, panel.h, 0.10);
     ctx.restore();
   }
 
   // Corner halftone clusters, then the crisp comic borders.
-  halftoneCorners(ctx, W, H);
+  dotCorners(ctx, W, H);
   const S = Math.min(W, H);
   const lw = Math.max(4, Math.min(7, S * 0.006));
   ctx.lineWidth = lw;
@@ -140,32 +140,32 @@ export function renderCover(ctx, state, W, H, opts = {}) {
   ctx.strokeRect(0, 0, W, H);
 
   // Two foreground palms in the bottom corners, clear of the faces.
-  drawPalm(ctx, W * 0.03, H * 1.0, H * 0.30, 0.16, false);
-  drawPalm(ctx, W * 0.97, H * 1.0, H * 0.20, -0.14, true);
+  paintPalm(ctx, W * 0.03, H * 1.0, H * 0.30, 0.16, false);
+  paintPalm(ctx, W * 0.97, H * 1.0, H * 0.20, -0.14, true);
 
   // Fine film grain over everything.
-  grain(ctx, W, H, seed);
+  filmGrain(ctx, W, H, seed);
 
   // Stickers, in order.
-  if (state.stickers.vice) viceCityBadge(ctx, W, H);
-  if (state.stickers.leonida) leonidaBadge(ctx, W, H);
-  if (state.stickers.stars) starsRow(ctx, W, H);
-  if (state.stickers.palm) palmBadge(ctx, W, H);
+  if (studio.stickers.vice) badgeVice(ctx, W, H);
+  if (studio.stickers.leonida) badgeLeonida(ctx, W, H);
+  if (studio.stickers.stars) starRow(ctx, W, H);
+  if (studio.stickers.palm) badgePalm(ctx, W, H);
 
   // Giant caption last, so nothing covers it.
-  paintTitle(ctx, state.title, state.subtitle, W, H, {
-    placement: state.placement, colour: state.titleColour, scale: state.titleScale,
+  paintCaption(ctx, studio.title, studio.subtitle, W, H, {
+    placement: studio.placement, colour: studio.titleColour, scale: studio.titleScale,
   });
 
   // Editor-only selection outline.
-  if (opts.editor && state.selected >= 0 && panels[state.selected]) {
-    const p = panels[state.selected];
+  if (opts.editor && studio.selected >= 0 && panels[studio.selected]) {
+    const p = panels[studio.selected];
     ctx.save();
     ctx.setLineDash([10, 6]);
     ctx.strokeStyle = '#00E5FF'; ctx.lineWidth = 2.5;
     ctx.strokeRect(p.x + 3, p.y + 3, p.w - 6, p.h - 6);
     ctx.setLineDash([]);
-    const label = `PANEL ${state.selected + 1}`;
+    const label = `PANEL ${studio.selected + 1}`;
     ctx.font = `900 ${Math.max(11, S * 0.016)}px Arial`;
     const tw = ctx.measureText(label).width + 16;
     ctx.fillStyle = '#00E5FF';
@@ -179,51 +179,51 @@ export function renderCover(ctx, state, W, H, opts = {}) {
 }
 
 // Render at one of the three post sizes into a fresh canvas and return it.
-export function renderExport(state, sizeId) {
-  const size = SIZES[sizeId] || SIZES.landscape;
+export function exportCanvas(studio, sizeId) {
+  const size = SHEET_SIZES[sizeId] || SHEET_SIZES.landscape;
   const canvas = document.createElement('canvas');
   canvas.width = size.w; canvas.height = size.h;
   const ctx = canvas.getContext('2d');
-  renderCover(ctx, state, size.w, size.h, {});
+  paintCover(ctx, studio, size.w, size.h, {});
   return canvas;
 }
 
-// Framing self-check helper: classify every panel of every concept/size.
-export function framingReport(state, concepts) {
+// Framing self-check helper: classify every panel of every preset/size.
+export function framingAudit(studio, presets) {
   let total = 0, cut = 0;
   const bad = [];
-  for (const name of Object.keys(concepts)) {
-    const probe = applyConcept(cloneState(state), name);
-    for (const sizeId of Object.keys(SIZES)) {
-      const size = SIZES[sizeId];
-      const layout = layoutById(probe.layout);
-      const panels = layoutPanels(layout, size.w, size.h);
+  for (const name of Object.keys(presets)) {
+    const probe = usePreset(copyStudio(studio), name);
+    for (const sizeId of Object.keys(SHEET_SIZES)) {
+      const size = SHEET_SIZES[sizeId];
+      const tiling = tilingById(probe.layout);
+      const panels = panelRects(tiling, size.w, size.h);
       const crops = probe.cropsFor(probe.layout);
       for (let i = 0; i < panels.length; i++) {
         const crop = crops[i];
         const photo = probe.photos[crop.photo];
         if (!photo || !photo.img) continue;
-        const frame = computeFrame(photo.img, panels[i], crop, resolveFocus(photo));
-        const verdict = classifyFrame(frame, resolveFocus(photo));
+        const frame = frameFor(photo.img, panels[i], crop, focusFor(photo));
+        const verdict = verdictFor(frame, focusFor(photo));
         total++;
         if (verdict === 'cut') { cut++; bad.push(`${name}/${sizeId}/panel${i + 1}`); }
       }
     }
   }
   // Zoom / pan extremes on hero panels.
-  const probe = applyConcept(cloneState(state), 'Sunset Beach Heist');
-  const layout = layoutById(probe.layout);
-  for (const sizeId of Object.keys(SIZES)) {
-    const size = SIZES[sizeId];
-    const panels = layoutPanels(layout, size.w, size.h);
+  const probe = usePreset(copyStudio(studio), 'Sunset Beach Heist');
+  const tiling = tilingById(probe.layout);
+  for (const sizeId of Object.keys(SHEET_SIZES)) {
+    const size = SHEET_SIZES[sizeId];
+    const panels = panelRects(tiling, size.w, size.h);
     const hero = panels.find(p => p.tag === 'hero');
     const photo = probe.photos[0];
     if (!hero || !photo || !photo.img) continue;
     for (const z of [1, 2, 4]) {
       for (const px of [-1, 0, 1]) {
         for (const py of [-1, 0, 1]) {
-          const frame = computeFrame(photo.img, hero, { zoom: z, panX: px, panY: py, kind: 'face' }, resolveFocus(photo));
-          const verdict = classifyFrame(frame, resolveFocus(photo));
+          const frame = frameFor(photo.img, hero, { zoom: z, panX: px, panY: py, kind: 'face' }, focusFor(photo));
+          const verdict = verdictFor(frame, focusFor(photo));
           total++;
           if (verdict === 'cut') { cut++; bad.push(`extreme/${sizeId}/z${z}/p${px},${py}`); }
         }

@@ -1,17 +1,18 @@
-// state.js — the shared cover state and the four one-click concepts.
+// state.js — the shared cover state and the four one-click presets
+// for Vice Cover Studio v26.
 
-import { layoutById } from './layouts.js';
+import { tilingById } from './layouts.js';
 
-export const SIZES = {
+export const SHEET_SIZES = {
   square: { id: 'square', name: 'Square', w: 1080, h: 1080 },
   portrait: { id: 'portrait', name: 'Portrait', w: 1080, h: 1350 },
   landscape: { id: 'landscape', name: 'Landscape', w: 1920, h: 1080 },
 };
 
-export const SAMPLE_ORDER = ['boulevard', 'pier', 'porsche', 'summer'];
+export const ROLL_ORDER = ['boulevard', 'pier', 'porsche', 'summer'];
 
-export function createState() {
-  const state = {
+export function newStudio() {
+  const studio = {
     photos: [], // { img, name, focus? }
     layout: 'sunsetHero',
     grade: 'sunset',
@@ -27,23 +28,23 @@ export function createState() {
     selected: -1,
     concept: 'Sunset Beach Heist',
   };
-  state.cropsFor = function (layoutId) {
-    const layout = layoutById(layoutId);
-    const count = layout.panels(1920, 1080).length;
+  studio.cropsFor = function (layoutId) {
+    const tiling = tilingById(layoutId);
+    const count = tiling.panels(1920, 1080).length;
     let list = this.crops[layoutId];
     if (!list || list.length !== count) {
-      list = defaultCrops(layoutId, this.photos.length || 4);
+      list = freshCrops(layoutId, this.photos.length || 4);
       this.crops[layoutId] = list;
     }
     return list;
   };
-  return state;
+  return studio;
 }
 
-// Fresh crops for a layout: photos round-robin by slot, zoom 1, centred pan.
-export function defaultCrops(layoutId, photoCount) {
-  const layout = layoutById(layoutId);
-  const count = layout.panels(1920, 1080).length;
+// Fresh crops for a tiling: photos round-robin by slot, zoom 1, centred pan.
+export function freshCrops(layoutId, photoCount) {
+  const tiling = tilingById(layoutId);
+  const count = tiling.panels(1920, 1080).length;
   const n = Math.max(1, photoCount);
   const out = [];
   for (let i = 0; i < count; i++) {
@@ -53,7 +54,7 @@ export function defaultCrops(layoutId, photoCount) {
 }
 
 // Crop shorthand: [photoName, zoom, panX, panY, kind, aimX, aimY]
-function buildCrops(order, specs, photoCount) {
+function cropsFrom(order, specs, photoCount) {
   const n = Math.max(1, photoCount);
   return specs.map(s => {
     const idx = order.indexOf(s[0]);
@@ -68,7 +69,7 @@ function buildCrops(order, specs, photoCount) {
   });
 }
 
-export const CONCEPTS = {
+export const PRESETS = {
   'Sunset Beach Heist': {
     layout: 'sunsetHero', grade: 'sunset', intensity: 0.92, size: 'landscape',
     title: 'SUNSET HEIST', subtitle: 'A VICE CITY STORY', colour: 'white', scale: 1,
@@ -125,42 +126,42 @@ export const CONCEPTS = {
   },
 };
 
-// Apply a concept to a state (mutates and returns it). Keeps the user's own
-// photos when they have any; loads the sample roll only when the roll is
-// empty (the caller supplies loadSamples for that case).
-export function applyConcept(state, name, loadSamples) {
-  const c = CONCEPTS[name];
-  if (!c) return state;
-  if (state.photos.length === 0 && loadSamples) loadSamples(state);
-  // Reorder the roll to the concept's order when the roll holds the samples.
+// Apply a preset to a studio (mutates and returns it). Keeps the user's
+// own photos when they have any; loads the sample roll only when the
+// roll is empty (the caller supplies loadSamples for that case).
+export function usePreset(studio, name, loadSamples) {
+  const c = PRESETS[name];
+  if (!c) return studio;
+  if (studio.photos.length === 0 && loadSamples) loadSamples(studio);
+  // Reorder the roll to the preset's order when the roll holds the samples.
   const byName = {};
-  for (const p of state.photos) byName[p.name.replace(/\.[^.]+$/, '')] = p;
+  for (const p of studio.photos) byName[p.name.replace(/\.[^.]+$/, '')] = p;
   const ordered = [];
   for (const n of c.order) if (byName[n]) ordered.push(byName[n]);
-  for (const p of state.photos) if (!ordered.includes(p)) ordered.push(p);
-  if (ordered.length > 0) state.photos = ordered;
-  state.layout = c.layout;
-  state.grade = c.grade;
-  state.intensity = c.intensity;
-  state.size = c.size;
-  state.title = c.title;
-  state.subtitle = c.subtitle;
-  state.titleColour = c.colour;
-  state.titleScale = c.scale;
-  state.stickers = { ...c.stickers };
-  state.crops[c.layout] = buildCrops(c.order, c.crops, state.photos.length || 4);
-  state.concept = name;
-  state.selected = -1;
-  return state;
+  for (const p of studio.photos) if (!ordered.includes(p)) ordered.push(p);
+  if (ordered.length > 0) studio.photos = ordered;
+  studio.layout = c.layout;
+  studio.grade = c.grade;
+  studio.intensity = c.intensity;
+  studio.size = c.size;
+  studio.title = c.title;
+  studio.subtitle = c.subtitle;
+  studio.titleColour = c.colour;
+  studio.titleScale = c.scale;
+  studio.stickers = { ...c.stickers };
+  studio.crops[c.layout] = cropsFrom(c.order, c.crops, studio.photos.length || 4);
+  studio.concept = name;
+  studio.selected = -1;
+  return studio;
 }
 
-// Clone a state shallowly (photos shared) for probes and tests.
-export function cloneState(state) {
-  const copy = createState();
-  Object.assign(copy, state, {
-    photos: state.photos.slice(),
-    stickers: { ...state.stickers },
-    crops: Object.fromEntries(Object.entries(state.crops).map(([k, v]) => [k, v.map(c => ({ ...c }))])),
+// Clone a studio shallowly (photos shared) for probes and tests.
+export function copyStudio(studio) {
+  const copy = newStudio();
+  Object.assign(copy, studio, {
+    photos: studio.photos.slice(),
+    stickers: { ...studio.stickers },
+    crops: Object.fromEntries(Object.entries(studio.crops).map(([k, v]) => [k, v.map(c => ({ ...c }))])),
   });
   return copy;
 }

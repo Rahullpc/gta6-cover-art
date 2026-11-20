@@ -1,17 +1,18 @@
-// grades.js — the six colour grades.
-// A grade is two things: a canvas filter applied while the photo draws, and
-// an ordered stack of washes laid over the panel afterwards. Intensity k
-// runs 0..1; every grade stays saturated and bold at the default.
-// Night grades (moon + sparkles, never a sun): Neon Night, Teal Noir,
-// Ultraviolet. Wash kinds: 'solid', 'linear' (vertical), 'diag' (diagonal),
-// 'glow' (radial corner glow). All alphas below are multiplied by k.
+// grades.js — the six colour tints for Vice Cover Studio v26.
+// A tint is two things: a canvas filter applied while the photo draws,
+// and an ordered stack of washes laid over the panel afterwards.
+// Intensity k runs 0..1; every tint stays saturated and bold at default.
+// Night tints (moon + sparkles, never a sun): Neon Night, Teal Noir,
+// Ultraviolet. Wash kinds: 'solid', 'linear' (vertical), 'diag'
+// (diagonal), 'glow' (radial corner glow). All alphas below are
+// multiplied by k.
 
-function rgba(c, k) {
+function withAlpha(c, k) {
   const a = Math.max(0, Math.min(1, c[3] * k));
   return `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 }
 
-export const GRADES = [
+export const TINTS = [
   {
     id: 'sunset', name: 'Sunset', night: false,
     filter: k => `saturate(${1 + 0.85 * k}) contrast(${1 + 0.18 * k}) brightness(${1 + 0.05 * k})`,
@@ -78,33 +79,33 @@ export const GRADES = [
   },
 ];
 
-export function gradeById(id) {
-  return GRADES.find(g => g.id === id) || GRADES[0];
+export function tintById(id) {
+  return TINTS.find(g => g.id === id) || TINTS[0];
 }
 
 // Paint one wash over rect (x, y, w, h) at intensity k.
-export function paintWash(ctx, wash, x, y, w, h, k) {
+export function applyWash(ctx, wash, x, y, w, h, k) {
   const prev = ctx.globalCompositeOperation;
   ctx.globalCompositeOperation = wash.blend;
   ctx.save();
   ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
   if (wash.kind === 'solid') {
-    ctx.fillStyle = rgba(wash.c, k);
+    ctx.fillStyle = withAlpha(wash.c, k);
     ctx.fillRect(x, y, w, h);
   } else if (wash.kind === 'linear' || wash.kind === 'diag') {
     let y0 = y, y1 = y + h, x0 = x, x1 = x;
     if (wash.region) { y0 = y + wash.region[0] * h; y1 = y + wash.region[1] * h; }
     if (wash.kind === 'diag') { x1 = x + w; }
     const g = ctx.createLinearGradient(x0, y0, x1, y1);
-    for (const s of wash.stops) g.addColorStop(s.at, rgba(s.c, k));
+    for (const s of wash.stops) g.addColorStop(s.at, withAlpha(s.c, k));
     ctx.fillStyle = g;
     ctx.fillRect(x, y0, w, y1 - y0);
   } else if (wash.kind === 'glow') {
     const R = wash.r * Math.max(w, h);
     const gx = x + wash.at[0] * w, gy = y + wash.at[1] * h;
     const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, R);
-    g.addColorStop(0, rgba(wash.c, k));
-    g.addColorStop(1, rgba([wash.c[0], wash.c[1], wash.c[2], 0], k));
+    g.addColorStop(0, withAlpha(wash.c, k));
+    g.addColorStop(1, withAlpha([wash.c[0], wash.c[1], wash.c[2], 0], k));
     ctx.fillStyle = g;
     ctx.fillRect(x, y, w, h);
   }

@@ -1,12 +1,14 @@
-// shots.js — reproducible screenshot scenes driven by the URL query string.
+// shots.js — reproducible screenshot scenes driven by the URL query
+// string for Vice Cover Studio v26.
 // ?shot=cover|editor &preset=<concept> &size=<square|portrait|landscape>
 // &caption=<title> &sub=<subtitle> &photo=<sample>
 // Both scenes share one preparation step; two animation frames after the
-// paint, window.__shotReady flips true so a screenshot script can wait on it.
+// paint, window.__shotReady flips true so a screenshot script can wait
+// on it.
 
-import { applyConcept } from './state.js';
+import { usePreset } from './state.js';
 
-export async function runShot(state, ed, params) {
+export async function playShot(studio, ed, params) {
   const preset = params.get('preset') || 'Sunset Beach Heist';
   const size = params.get('size');
   const caption = params.get('caption');
@@ -14,25 +16,25 @@ export async function runShot(state, ed, params) {
   const extraPhoto = params.get('photo');
   const shot = params.get('shot') || 'cover';
 
-  if (state.photos.length === 0) await ed.loadSamples();
+  if (studio.photos.length === 0) await ed.loadSamples();
   if (extraPhoto) {
     const img = new Image();
     await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = `samples/${extraPhoto}.jpg`; });
-    state.photos.push({ img, name: extraPhoto });
+    studio.photos.push({ img, name: extraPhoto });
   }
-  applyConcept(state, preset);
-  if (size && ['square', 'portrait', 'landscape'].includes(size)) state.size = size;
-  if (caption !== null) state.title = caption;
-  if (sub !== null) state.subtitle = sub;
-  state.selected = -1;
+  usePreset(studio, preset);
+  if (size && ['square', 'portrait', 'landscape'].includes(size)) studio.size = size;
+  if (caption !== null) studio.title = caption;
+  if (sub !== null) studio.subtitle = sub;
+  studio.selected = -1;
   ed.refreshThumbs(); ed.refreshCropUI();
 
   if (shot === 'cover') {
     // Render the exported cover at the post size through the exact export
     // path and blit it full-bleed onto the viewport canvas.
-    const { renderExport, SIZES } = await import('./cover.js');
-    const sizeDef = SIZES[state.size];
-    const cover = renderExport(state, state.size);
+    const { exportCanvas, SHEET_SIZES } = await import('./cover.js');
+    const sizeDef = SHEET_SIZES[studio.size];
+    const cover = exportCanvas(studio, studio.size);
     const cv = ed.canvas;
     const dpr = window.devicePixelRatio || 1;
     const vw = window.innerWidth, vh = window.innerHeight;
@@ -47,7 +49,7 @@ export async function runShot(state, ed, params) {
     document.body.classList.add('shot-cover');
   } else {
     // Editor scene: full editor, samples loaded, first panel selected.
-    state.selected = 0;
+    studio.selected = 0;
     ed.repaint();
     ed.refreshCropUI();
     ed.status('Sample photos loaded — click any panel to crop, then export.');

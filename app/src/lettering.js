@@ -1,11 +1,12 @@
-// lettering.js — the giant comic caption.
+// lettering.js — the giant comic caption for Vice Cover Studio v26.
 // All-caps display title plus a sub-caption line, painted last with a
-// slight poster skew (horizontal shear about -0.08). The title auto-shrinks
-// and wraps into at most two balanced lines inside 90% of the sheet width.
+// slight poster skew (horizontal shear about -0.08). The title
+// auto-shrinks and wraps into at most two balanced lines inside 90% of
+// the sheet width.
 
-const FONT = `'Noto Sans Condensed Black', 'Arial Black', sans-serif`;
+const DISPLAY_FONT = `'Noto Sans Condensed Black', 'Arial Black', sans-serif`;
 
-function fillFor(ctx, colour, x, y, w, h) {
+function fillStyleFor(ctx, colour, x, y, w, h) {
   switch (colour) {
     case 'sunset': {
       const g = ctx.createLinearGradient(0, y, 0, y + h);
@@ -23,9 +24,9 @@ function fillFor(ctx, colour, x, y, w, h) {
   }
 }
 
-// Split a title into at most two balanced lines: split at the space nearest
-// the middle so the two lines are close in length.
-export function splitTitle(title) {
+// Split a title into at most two balanced lines: split at the space
+// nearest the middle so the two lines are close in length.
+export function breakTitle(title) {
   const words = String(title || '').trim().split(/\s+/).filter(Boolean);
   if (words.length <= 1) return [words.join(' ')];
   const full = words.join(' ');
@@ -40,13 +41,13 @@ export function splitTitle(title) {
   return [words.slice(0, best + 1).join(' '), words.slice(best + 1).join(' ')];
 }
 
-function measureLines(ctx, lines, size) {
-  ctx.font = `900 ${size}px ${FONT}`;
+function widestLine(ctx, lines, size) {
+  ctx.font = `900 ${size}px ${DISPLAY_FONT}`;
   return Math.max(...lines.map(l => ctx.measureText(l).width));
 }
 
 // Lay out the title: returns { lines, size, blockH }.
-export function layoutTitle(ctx, title, W, H, scale) {
+export function titleLayout(ctx, title, W, H, scale) {
   const maxW = W * 0.9;
   const minSize = H * 0.05;
   let size = H * 0.16 * scale;
@@ -54,11 +55,11 @@ export function layoutTitle(ctx, title, W, H, scale) {
   if (words.length === 0) return { lines: [], size, blockH: 0 };
   let lines = [words.join(' ')];
   while (size > minSize) {
-    ctx.font = `900 ${size}px ${FONT}`;
-    if (measureLines(ctx, lines, size) <= maxW) break;
+    ctx.font = `900 ${size}px ${DISPLAY_FONT}`;
+    if (widestLine(ctx, lines, size) <= maxW) break;
     if (lines.length === 1 && words.length > 1) {
-      lines = splitTitle(title);
-      if (measureLines(ctx, lines, size) <= maxW) break;
+      lines = breakTitle(title);
+      if (widestLine(ctx, lines, size) <= maxW) break;
     }
     size *= 0.93;
   }
@@ -66,12 +67,12 @@ export function layoutTitle(ctx, title, W, H, scale) {
   return { lines, size, blockH };
 }
 
-export function paintTitle(ctx, title, sub, W, H, opts) {
+export function paintCaption(ctx, title, sub, W, H, opts) {
   const { placement = 'bottom', colour = 'white', scale = 1 } = opts || {};
   const t = String(title || '').trim().toUpperCase();
   const s = String(sub || '').trim().toUpperCase();
   if (!t && !s) return;
-  const lay = layoutTitle(ctx, t, W, H, scale);
+  const lay = titleLayout(ctx, t, W, H, scale);
   const size = lay.size;
   const subSize = Math.max(H * 0.028, size * 0.24);
   const gap = size * 0.28;
@@ -95,7 +96,7 @@ export function paintTitle(ctx, title, sub, W, H, opts) {
   for (const line of lay.lines) {
     const ly = y + size * 0.51;
     // Cyan shadow, then magenta shadow, then fat black outline, then fill.
-    ctx.font = `900 ${size}px ${FONT}`;
+    ctx.font = `900 ${size}px ${DISPLAY_FONT}`;
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = '#00E5FF';
     ctx.fillText(line, W / 2 + size * 0.10, ly + size * 0.13);
@@ -107,14 +108,14 @@ export function paintTitle(ctx, title, sub, W, H, opts) {
     ctx.lineWidth = size * 0.17;
     ctx.strokeStyle = '#0D001A';
     ctx.strokeText(line, W / 2, ly);
-    ctx.fillStyle = fillFor(ctx, colour, W / 2, ly - size / 2, size, size);
+    ctx.fillStyle = fillStyleFor(ctx, colour, W / 2, ly - size / 2, size, size);
     ctx.fillText(line, W / 2, ly);
     y += size * 1.02;
   }
 
   if (s) {
     const subY = y + gap + subSize * 0.5;
-    ctx.font = `900 ${subSize}px ${FONT}`;
+    ctx.font = `900 ${subSize}px ${DISPLAY_FONT}`;
     const tw = ctx.measureText(s.split('').join('\u2009')).width + subSize * 0.9;
     const pillW = Math.min(W * 0.9, tw + subSize * 1.6);
     const pillH = subSize + H * 0.02;

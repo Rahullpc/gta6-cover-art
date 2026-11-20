@@ -1,42 +1,41 @@
-// main.js — boot: create the state, wire the editor, wait for the display
-// font, then run a screenshot scene when the URL asks for one, or load the
-// four samples with the default concept.
-import { createState, CONCEPTS, applyConcept, cloneState } from './state.js';
-import { createEditor, loadSamplesSync } from './editor.js';
-import { renderCover, renderExport, framingReport, SIZES } from './cover.js';
-import { exportDataURL } from './export.js';
-import { runShot } from './shots.js';
-import { LAYOUTS, layoutById, layoutPanels } from './layouts.js';
-import { defaultCrops } from './state.js';
-import { computeFrame, resolveFocus, classifyFrame } from './framing.js';
+// main.js — boot for Vice Cover Studio v26: build the studio, wire the
+// editor, wait for the display font, then run a screenshot scene when
+// the URL asks for one, or load the four samples with the default preset.
+import { newStudio, PRESETS, usePreset, freshCrops } from './state.js';
+import { newEditor, loadSamplesNow } from './editor.js';
+import { paintCover, exportCanvas, framingAudit, SHEET_SIZES } from './cover.js';
+import { pngDataURL } from './export.js';
+import { playShot } from './shots.js';
+import { TILINGS, tilingById, panelRects } from './layouts.js';
+import { frameFor, focusFor, verdictFor } from './framing.js';
 
-const state = createState();
+const studio = newStudio();
 const canvas = document.getElementById('previewCanvas');
-const editor = createEditor(state, canvas);
+const editor = newEditor(studio, canvas);
 
 async function boot() {
   const params = new URLSearchParams(location.search);
   try { await document.fonts.load(`900 40px 'Noto Sans Condensed Black'`); } catch (e) {}
   try { await document.fonts.ready; } catch (e) {}
   if (params.has('shot')) {
-    await runShot(state, editor, params);
+    await playShot(studio, editor, params);
   } else {
     await editor.loadSamples();
-    applyConcept(state, 'Sunset Beach Heist');
+    usePreset(studio, 'Sunset Beach Heist');
     editor.repaint();
     editor.status('Sample photos loaded — click any panel to crop, then export.');
   }
   // Test hook: everything an automated check needs.
   window.__test = {
-    state, editor,
-    render: renderCover, renderExport, exportDataURL,
-    framing: { computeFrame, resolveFocus, classifyFrame },
-    layouts: LAYOUTS, layoutById, layoutPanels,
-    defaultCrops, concepts: CONCEPTS,
-    applyConcept: (name) => applyConcept(state, name),
-    activeCrops: () => state.cropsFor(state.layout),
-    framingReport: () => framingReport(cloneState(state), CONCEPTS),
-    loadSamplesSync: () => loadSamplesSync(state),
+    state: studio, editor,
+    render: paintCover, renderExport: exportCanvas, exportDataURL: pngDataURL,
+    framing: { computeFrame: frameFor, resolveFocus: focusFor, classifyFrame: verdictFor },
+    layouts: TILINGS, layoutById: tilingById, layoutPanels: panelRects,
+    defaultCrops: freshCrops, concepts: PRESETS,
+    applyConcept: (name) => usePreset(studio, name),
+    activeCrops: () => studio.cropsFor(studio.layout),
+    framingReport: () => framingAudit(studio, PRESETS),
+    loadSamplesSync: () => loadSamplesNow(studio),
   };
 }
 

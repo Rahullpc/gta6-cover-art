@@ -1,16 +1,17 @@
-// editor.js — all editor controls and interactions.
-import { renderCover, renderExport } from './cover.js';
-import { LAYOUTS, layoutPanels, layoutById } from './layouts.js';
-import { GRADES } from './grades.js';
-import { CONCEPTS, applyConcept, defaultCrops } from './state.js';
-import { dragToPan } from './framing.js';
-import { exportPNG, exportAll, exportDataURL } from './export.js';
+// editor.js — all editor controls and interactions for Vice Cover
+// Studio v26.
+import { paintCover, exportCanvas } from './cover.js';
+import { TILINGS, panelRects, tilingById } from './layouts.js';
+import { TINTS } from './grades.js';
+import { PRESETS, usePreset, freshCrops } from './state.js';
+import { panFromDrag } from './framing.js';
+import { savePNG, saveAll, pngDataURL } from './export.js';
 
 const $ = id => document.getElementById(id);
 
-export function createEditor(state, canvas) {
+export function newEditor(studio, canvas) {
   const ed = {
-    state, canvas,
+    studio, canvas,
     ctx: canvas.getContext('2d'),
     view: { scale: 1, ox: 0, oy: 0, cw: 0, ch: 0 },
     drag: null,
@@ -18,10 +19,10 @@ export function createEditor(state, canvas) {
     info: () => {
       const el = $('infoLine');
       if (!el) return;
-      const layout = layoutById(state.layout);
-      const grade = GRADES.find(g => g.id === state.grade);
-      const size = { square: '1080 × 1080', portrait: '1080 × 1350', landscape: '1920 × 1080' }[state.size];
-      el.textContent = `${size} · ${layout.name} · ${grade ? grade.name : state.grade} · ${state.photos.length} photo${state.photos.length === 1 ? '' : 's'}`;
+      const tiling = tilingById(studio.layout);
+      const tint = TINTS.find(g => g.id === studio.grade);
+      const size = { square: '1080 × 1080', portrait: '1080 × 1350', landscape: '1920 × 1080' }[studio.size];
+      el.textContent = `${size} · ${tiling.name} · ${tint ? tint.name : studio.grade} · ${studio.photos.length} photo${studio.photos.length === 1 ? '' : 's'}`;
     },
   };
 
@@ -36,7 +37,7 @@ export function createEditor(state, canvas) {
     canvas.height = Math.round(ch * dpr);
     canvas.style.width = cw + 'px';
     canvas.style.height = ch + 'px';
-    const size = { square: [1080, 1080], portrait: [1080, 1350], landscape: [1920, 1080] }[state.size];
+    const size = { square: [1080, 1080], portrait: [1080, 1350], landscape: [1920, 1080] }[studio.size];
     const s = Math.min(cw / size[0], ch / size[1]);
     ed.view = { scale: s * dpr, ox: (cw - size[0] * s) / 2 * dpr, oy: (ch - size[1] * s) / 2 * dpr, cw, ch };
   };
@@ -44,27 +45,26 @@ export function createEditor(state, canvas) {
   ed.repaint = function () {
     ed.fit();
     const ctx = ed.ctx;
-    const dpr = window.devicePixelRatio || 1;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#0A0512';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const size = { square: [1080, 1080], portrait: [1080, 1350], landscape: [1920, 1080] }[state.size];
+    const size = { square: [1080, 1080], portrait: [1080, 1350], landscape: [1920, 1080] }[studio.size];
     const off = document.createElement('canvas');
     off.width = size[0]; off.height = size[1];
-    renderCover(off.getContext('2d'), state, size[0], size[1], { editor: true });
+    paintCover(off.getContext('2d'), studio, size[0], size[1], { editor: true });
     ctx.drawImage(off, ed.view.ox, ed.view.oy, size[0] * ed.view.scale, size[1] * ed.view.scale);
     ed.info();
   };
 
   ed.toCover = function (cx, cy) {
-    const size = { square: [1080, 1080], portrait: [1080, 1350], landscape: [1920, 1080] }[state.size];
+    const size = { square: [1080, 1080], portrait: [1080, 1350], landscape: [1920, 1080] }[studio.size];
     return { x: (cx - ed.view.ox) / ed.view.scale, y: (cy - ed.view.oy) / ed.view.scale, w: size[0], h: size[1] };
   };
 
   ed.pickPanel = function (cx, cy) {
     const p = ed.toCover(cx, cy);
-    const layout = layoutById(state.layout);
-    const panels = layoutPanels(layout, p.w, p.h);
+    const tiling = tilingById(studio.layout);
+    const panels = panelRects(tiling, p.w, p.h);
     for (let i = panels.length - 1; i >= 0; i--) {
       const r = panels[i];
       if (p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h) return i;
@@ -75,9 +75,9 @@ export function createEditor(state, canvas) {
   ed.refreshCropUI = function () {
     const sec = $('cropSection');
     if (!sec) return;
-    const sel = state.selected;
-    const layout = layoutById(state.layout);
-    const panels = layoutPanels(layout, 1920, 1080);
+    const sel = studio.selected;
+    const tiling = tilingById(studio.layout);
+    const panels = panelRects(tiling, 1920, 1080);
     if (sel < 0 || !panels[sel]) {
       $('cropDetail').style.display = 'none';
       $('cropHint').style.display = 'block';
@@ -86,11 +86,11 @@ export function createEditor(state, canvas) {
     $('cropHint').style.display = 'none';
     $('cropDetail').style.display = 'block';
     $('cropLabel').textContent = `Panel ${sel + 1} · ${panels[sel].tag}`;
-    const crops = state.cropsFor(state.layout);
+    const crops = studio.cropsFor(studio.layout);
     const crop = crops[sel];
     const selEl = $('cropPhoto');
     selEl.innerHTML = '';
-    state.photos.forEach((p, i) => {
+    studio.photos.forEach((p, i) => {
       const o = document.createElement('option');
       o.value = i; o.textContent = p.name;
       selEl.appendChild(o);
@@ -104,7 +104,7 @@ export function createEditor(state, canvas) {
     const list = $('photoList');
     if (!list) return;
     list.innerHTML = '';
-    state.photos.forEach((p, i) => {
+    studio.photos.forEach((p, i) => {
       const chip = document.createElement('div');
       chip.className = 'thumb';
       const im = document.createElement('img');
@@ -114,31 +114,31 @@ export function createEditor(state, canvas) {
       const rm = document.createElement('button');
       rm.className = 'thumb-x'; rm.textContent = '×'; rm.title = 'Remove';
       rm.onclick = () => {
-        state.photos.splice(i, 1);
-        for (const k of Object.keys(state.crops)) {
-          for (const c of state.crops[k]) c.photo = c.photo >= state.photos.length ? 0 : c.photo;
+        studio.photos.splice(i, 1);
+        for (const k of Object.keys(studio.crops)) {
+          for (const c of studio.crops[k]) c.photo = c.photo >= studio.photos.length ? 0 : c.photo;
         }
         ed.refreshThumbs(); ed.refreshCropUI(); ed.repaint();
-        $('photoCount').textContent = `${state.photos.length}/5`;
+        $('photoCount').textContent = `${studio.photos.length}/5`;
       };
       chip.appendChild(im); chip.appendChild(lb); chip.appendChild(rm);
       list.appendChild(chip);
     });
-    $('photoCount').textContent = `${state.photos.length}/5`;
+    $('photoCount').textContent = `${studio.photos.length}/5`;
   };
 
   ed.loadFiles = function (files) {
-    const imgs = [...files].filter(f => f.type.startsWith('image/')).slice(0, 5 - state.photos.length);
+    const imgs = [...files].filter(f => f.type.startsWith('image/')).slice(0, 5 - studio.photos.length);
     if (imgs.length === 0) { ed.status('No image files — at most 5 photos.'); return; }
     let pending = imgs.length;
     for (const f of imgs) {
       const img = new Image();
       img.onload = () => {
-        state.photos.push({ img, name: f.name.replace(/\.[^.]+$/, '') });
+        studio.photos.push({ img, name: f.name.replace(/\.[^.]+$/, '') });
         if (--pending === 0) {
-          state.crops = {};
+          studio.crops = {};
           ed.refreshThumbs(); ed.refreshCropUI(); ed.repaint();
-          ed.status(`${state.photos.length} photo${state.photos.length === 1 ? '' : 's'} loaded.`);
+          ed.status(`${studio.photos.length} photo${studio.photos.length === 1 ? '' : 's'} loaded.`);
         }
       };
       img.src = URL.createObjectURL(f);
@@ -147,31 +147,31 @@ export function createEditor(state, canvas) {
 
   ed.loadSamples = async function () {
     const names = ['boulevard', 'pier', 'porsche', 'summer'];
-    state.photos = [];
+    studio.photos = [];
     for (const n of names) {
       const img = new Image();
       await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = `samples/${n}.jpg`; });
-      state.photos.push({ img, name: n });
+      studio.photos.push({ img, name: n });
     }
-    state.crops = {};
+    studio.crops = {};
     ed.refreshThumbs(); ed.refreshCropUI(); ed.repaint();
     ed.status('Sample photos loaded — click any panel to crop, then export.');
   };
 
   // ---- wire the rail ----
-  function buildConcepts() {
+  function buildPresets() {
     const box = $('conceptRow');
     box.innerHTML = '';
-    for (const name of Object.keys(CONCEPTS)) {
+    for (const name of Object.keys(PRESETS)) {
       const b = document.createElement('button');
-      b.className = 'concept-btn' + (state.concept === name ? ' active' : '');
+      b.className = 'concept-btn' + (studio.concept === name ? ' active' : '');
       b.textContent = name;
       b.onclick = async () => {
-        if (state.photos.length === 0) await loadSamplesSync(state);
-        applyConcept(state, name);
+        if (studio.photos.length === 0) await loadSamplesNow(studio);
+        usePreset(studio, name);
         document.querySelectorAll('.concept-btn').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
-        syncCaptionUI(); syncGradeUI(); syncLayoutUI(); syncStickerUI(); syncSizeUI();
+        syncCaptionUI(); syncTintUI(); syncTilingUI(); syncStickerUI(); syncSizeUI();
         ed.refreshThumbs(); ed.refreshCropUI(); ed.repaint();
         ed.status(`Concept applied: ${name}.`);
       };
@@ -179,12 +179,12 @@ export function createEditor(state, canvas) {
     }
   }
 
-  function buildLayouts() {
+  function buildTilings() {
     const box = $('layoutRow');
     box.innerHTML = '';
-    for (const l of LAYOUTS) {
+    for (const l of TILINGS) {
       const b = document.createElement('button');
-      b.className = 'layout-btn' + (state.layout === l.id ? ' active' : '');
+      b.className = 'layout-btn' + (studio.layout === l.id ? ' active' : '');
       const cv = document.createElement('canvas');
       cv.width = 72; cv.height = 48;
       const g = cv.getContext('2d');
@@ -195,8 +195,8 @@ export function createEditor(state, canvas) {
       lb.textContent = l.name;
       b.appendChild(cv); b.appendChild(lb);
       b.onclick = () => {
-        state.layout = l.id;
-        state.selected = -1;
+        studio.layout = l.id;
+        studio.selected = -1;
         document.querySelectorAll('.layout-btn').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
         ed.refreshCropUI(); ed.repaint();
@@ -206,7 +206,7 @@ export function createEditor(state, canvas) {
     }
   }
 
-  function buildGrades() {
+  function buildTints() {
     const box = $('gradeRow');
     box.innerHTML = '';
     const swatches = {
@@ -214,9 +214,9 @@ export function createEditor(state, canvas) {
       goldenHour: ['#FFD60A', '#D25418'], vicePink: ['#FF2E88', '#7B2FBE'],
       tealNoir: ['#14B8A6', '#08222A'], ultraviolet: ['#7B2FBE', '#2B0A4A'],
     };
-    for (const g of GRADES) {
+    for (const g of TINTS) {
       const b = document.createElement('button');
-      b.className = 'grade-btn' + (state.grade === g.id ? ' active' : '');
+      b.className = 'grade-btn' + (studio.grade === g.id ? ' active' : '');
       const sw = document.createElement('span');
       sw.className = 'swatch';
       sw.style.background = `linear-gradient(90deg, ${swatches[g.id][0]}, ${swatches[g.id][1]})`;
@@ -224,7 +224,7 @@ export function createEditor(state, canvas) {
       lb.textContent = g.name;
       b.appendChild(sw); b.appendChild(lb);
       b.onclick = () => {
-        state.grade = g.id;
+        studio.grade = g.id;
         document.querySelectorAll('.grade-btn').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
         ed.repaint();
@@ -235,35 +235,35 @@ export function createEditor(state, canvas) {
   }
 
   function syncCaptionUI() {
-    $('titleInput').value = state.title;
-    $('subInput').value = state.subtitle;
-    $('placeSelect').value = state.placement;
-    $('sizeSlider').value = Math.round(state.titleScale * 100);
+    $('titleInput').value = studio.title;
+    $('subInput').value = studio.subtitle;
+    $('placeSelect').value = studio.placement;
+    $('sizeSlider').value = Math.round(studio.titleScale * 100);
     document.querySelectorAll('.colour-sw').forEach(el => {
-      el.classList.toggle('active', el.dataset.colour === state.titleColour);
+      el.classList.toggle('active', el.dataset.colour === studio.titleColour);
     });
   }
-  function syncGradeUI() {
+  function syncTintUI() {
     document.querySelectorAll('.grade-btn').forEach((el, i) => {
-      el.classList.toggle('active', GRADES[i].id === state.grade);
+      el.classList.toggle('active', TINTS[i].id === studio.grade);
     });
-    $('intensitySlider').value = Math.round(state.intensity * 100);
-    $('intensityVal').textContent = Math.round(state.intensity * 100) + '%';
+    $('intensitySlider').value = Math.round(studio.intensity * 100);
+    $('intensityVal').textContent = Math.round(studio.intensity * 100) + '%';
   }
-  function syncLayoutUI() {
+  function syncTilingUI() {
     document.querySelectorAll('.layout-btn').forEach((el, i) => {
-      el.classList.toggle('active', LAYOUTS[i].id === state.layout);
+      el.classList.toggle('active', TILINGS[i].id === studio.layout);
     });
   }
   function syncStickerUI() {
-    $('stVice').checked = state.stickers.vice;
-    $('stLeonida').checked = state.stickers.leonida;
-    $('stStars').checked = state.stickers.stars;
-    $('stPalm').checked = state.stickers.palm;
+    $('stVice').checked = studio.stickers.vice;
+    $('stLeonida').checked = studio.stickers.leonida;
+    $('stStars').checked = studio.stickers.stars;
+    $('stPalm').checked = studio.stickers.palm;
   }
   function syncSizeUI() {
     document.querySelectorAll('.size-btn').forEach(el => {
-      el.classList.toggle('active', el.dataset.size === state.size);
+      el.classList.toggle('active', el.dataset.size === studio.size);
     });
   }
 
@@ -275,54 +275,54 @@ export function createEditor(state, canvas) {
     dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
     dz.addEventListener('dragleave', () => dz.classList.remove('over'));
     dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); ed.loadFiles(e.dataTransfer.files); });
-    $('titleInput').addEventListener('input', e => { state.title = e.target.value.slice(0, 48); ed.repaint(); });
-    $('subInput').addEventListener('input', e => { state.subtitle = e.target.value.slice(0, 60); ed.repaint(); });
-    $('placeSelect').addEventListener('change', e => { state.placement = e.target.value; ed.repaint(); });
-    $('sizeSlider').addEventListener('input', e => { state.titleScale = e.target.value / 100; ed.repaint(); });
+    $('titleInput').addEventListener('input', e => { studio.title = e.target.value.slice(0, 48); ed.repaint(); });
+    $('subInput').addEventListener('input', e => { studio.subtitle = e.target.value.slice(0, 60); ed.repaint(); });
+    $('placeSelect').addEventListener('change', e => { studio.placement = e.target.value; ed.repaint(); });
+    $('sizeSlider').addEventListener('input', e => { studio.titleScale = e.target.value / 100; ed.repaint(); });
     document.querySelectorAll('.colour-sw').forEach(el => {
       el.onclick = () => {
-        state.titleColour = el.dataset.colour;
+        studio.titleColour = el.dataset.colour;
         document.querySelectorAll('.colour-sw').forEach(x => x.classList.remove('active'));
         el.classList.add('active');
         ed.repaint();
       };
     });
     $('intensitySlider').addEventListener('input', e => {
-      state.intensity = e.target.value / 100;
+      studio.intensity = e.target.value / 100;
       $('intensityVal').textContent = e.target.value + '%';
       ed.repaint();
     });
-    $('stVice').addEventListener('change', e => { state.stickers.vice = e.target.checked; ed.repaint(); });
-    $('stLeonida').addEventListener('change', e => { state.stickers.leonida = e.target.checked; ed.repaint(); });
-    $('stStars').addEventListener('change', e => { state.stickers.stars = e.target.checked; ed.repaint(); });
-    $('stPalm').addEventListener('change', e => { state.stickers.palm = e.target.checked; ed.repaint(); });
+    $('stVice').addEventListener('change', e => { studio.stickers.vice = e.target.checked; ed.repaint(); });
+    $('stLeonida').addEventListener('change', e => { studio.stickers.leonida = e.target.checked; ed.repaint(); });
+    $('stStars').addEventListener('change', e => { studio.stickers.stars = e.target.checked; ed.repaint(); });
+    $('stPalm').addEventListener('change', e => { studio.stickers.palm = e.target.checked; ed.repaint(); });
     $('cropPhoto').addEventListener('change', e => {
-      const crops = state.cropsFor(state.layout);
-      crops[state.selected].photo = Number(e.target.value);
+      const crops = studio.cropsFor(studio.layout);
+      crops[studio.selected].photo = Number(e.target.value);
       ed.repaint();
     });
     $('cropZoom').addEventListener('input', e => {
-      const crops = state.cropsFor(state.layout);
-      crops[state.selected].zoom = Number(e.target.value);
+      const crops = studio.cropsFor(studio.layout);
+      crops[studio.selected].zoom = Number(e.target.value);
       $('cropZoomVal').textContent = Number(e.target.value).toFixed(2) + '×';
       ed.repaint();
     });
     $('cropReset').onclick = () => {
-      const crops = state.cropsFor(state.layout);
-      crops[state.selected] = { photo: state.selected % Math.max(1, state.photos.length), zoom: 1, panX: 0, panY: 0, kind: 'face' };
+      const crops = studio.cropsFor(studio.layout);
+      crops[studio.selected] = { photo: studio.selected % Math.max(1, studio.photos.length), zoom: 1, panX: 0, panY: 0, kind: 'face' };
       ed.refreshCropUI(); ed.repaint();
       ed.status('Crop reset.');
     };
     document.querySelectorAll('.size-btn').forEach(el => {
       el.onclick = () => {
-        state.size = el.dataset.size;
+        studio.size = el.dataset.size;
         syncSizeUI(); ed.repaint();
       };
     });
-    $('expSquare').onclick = () => exportPNG(state, 'square', ed);
-    $('expPortrait').onclick = () => exportPNG(state, 'portrait', ed);
-    $('expLandscape').onclick = () => exportPNG(state, 'landscape', ed);
-    $('expAll').onclick = () => exportAll(state, ed);
+    $('expSquare').onclick = () => savePNG(studio, 'square', ed);
+    $('expPortrait').onclick = () => savePNG(studio, 'portrait', ed);
+    $('expLandscape').onclick = () => savePNG(studio, 'landscape', ed);
+    $('expAll').onclick = () => saveAll(studio, ed);
   }
 
   function wireCanvas() {
@@ -330,8 +330,8 @@ export function createEditor(state, canvas) {
       const r = canvas.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
       const idx = ed.pickPanel((e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr);
-      if (idx < 0) { state.selected = -1; ed.refreshCropUI(); ed.repaint(); return; }
-      state.selected = idx;
+      if (idx < 0) { studio.selected = -1; ed.refreshCropUI(); ed.repaint(); return; }
+      studio.selected = idx;
       ed.drag = { x: e.clientX, y: e.clientY, moved: false };
       ed.refreshCropUI();
       const sec = $('cropSection');
@@ -339,54 +339,54 @@ export function createEditor(state, canvas) {
       ed.repaint();
     });
     canvas.addEventListener('pointermove', e => {
-      if (!ed.drag || state.selected < 0) return;
+      if (!ed.drag || studio.selected < 0) return;
       const dx = e.clientX - ed.drag.x, dy = e.clientY - ed.drag.y;
       if (Math.abs(dx) + Math.abs(dy) < 2 && !ed.drag.moved) return;
       ed.drag.moved = true;
-      const crops = state.cropsFor(state.layout);
-      const crop = crops[state.selected];
-      const layout = layoutById(state.layout);
-      const size = { square: [1080, 1080], portrait: [1080, 1350], landscape: [1920, 1080] }[state.size];
-      const panels = layoutPanels(layout, size[0], size[1]);
-      const panel = panels[state.selected];
-      const pan = dragToPan(crop, panel, dx / ed.view.scale * (window.devicePixelRatio || 1), dy / ed.view.scale * (window.devicePixelRatio || 1));
+      const crops = studio.cropsFor(studio.layout);
+      const crop = crops[studio.selected];
+      const tiling = tilingById(studio.layout);
+      const size = { square: [1080, 1080], portrait: [1080, 1350], landscape: [1920, 1080] }[studio.size];
+      const panels = panelRects(tiling, size[0], size[1]);
+      const panel = panels[studio.selected];
+      const pan = panFromDrag(crop, panel, dx / ed.view.scale * (window.devicePixelRatio || 1), dy / ed.view.scale * (window.devicePixelRatio || 1));
       crop.panX = pan.panX; crop.panY = pan.panY;
       ed.drag.x = e.clientX; ed.drag.y = e.clientY;
       ed.repaint();
     });
     window.addEventListener('pointerup', () => { ed.drag = null; });
     canvas.addEventListener('wheel', e => {
-      if (state.selected < 0) return;
+      if (studio.selected < 0) return;
       e.preventDefault();
-      const crops = state.cropsFor(state.layout);
-      const crop = crops[state.selected];
+      const crops = studio.cropsFor(studio.layout);
+      const crop = crops[studio.selected];
       crop.zoom = Math.max(1, Math.min(4, crop.zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
       $('cropZoom').value = crop.zoom;
       $('cropZoomVal').textContent = crop.zoom.toFixed(2) + '×';
       ed.repaint();
     }, { passive: false });
     window.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && state.selected >= 0) {
-        state.selected = -1; ed.refreshCropUI(); ed.repaint();
+      if (e.key === 'Escape' && studio.selected >= 0) {
+        studio.selected = -1; ed.refreshCropUI(); ed.repaint();
       }
     });
     new ResizeObserver(() => ed.repaint()).observe($('stageWrap'));
   }
 
-  buildConcepts(); buildLayouts(); buildGrades(); wireStatic(); wireCanvas();
-  syncCaptionUI(); syncGradeUI(); syncStickerUI(); syncSizeUI();
+  buildPresets(); buildTilings(); buildTints(); wireStatic(); wireCanvas();
+  syncCaptionUI(); syncTintUI(); syncStickerUI(); syncSizeUI();
   ed.refreshThumbs(); ed.refreshCropUI();
   return ed;
 }
 
-// Synchronous sample loader used when a concept needs the roll now.
-export async function loadSamplesSync(state) {
+// Synchronous sample loader used when a preset needs the roll now.
+export async function loadSamplesNow(studio) {
   const names = ['boulevard', 'pier', 'porsche', 'summer'];
-  state.photos = [];
+  studio.photos = [];
   for (const n of names) {
     const img = new Image();
     await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = `samples/${n}.jpg`; });
-    state.photos.push({ img, name: n });
+    studio.photos.push({ img, name: n });
   }
-  state.crops = {};
+  studio.crops = {};
 }

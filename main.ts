@@ -1,42 +1,53 @@
-// main.ts — entrypoint (Node 22, standard library only).
-// Copies app/ and screenshots/ beside this file into the output directory
-// (OUTPUT_DIR, else MAKEFUN_OUTPUT_DIR outside the grader, else /output)
-// and writes output/dossier.json with the vendored make.fun library.
+// main.ts — entrypoint for Vice Cover Studio v26 (Node 22, standard
+// library only).
+//
+// The grader runs this file. It stages the static app and the four
+// manifest screenshots into the output directory, then writes the
+// dossier the vendored make.fun library builds from that output.
+// Output dir: OUTPUT_DIR, else MAKEFUN_OUTPUT_DIR, else /output.
 import { cpSync, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-app.ts';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const out = resolve(process.env.OUTPUT_DIR || process.env.MAKEFUN_OUTPUT_DIR || '/output');
+const ROOT = dirname(fileURLToPath(import.meta.url));
+const OUT = resolve(process.env.OUTPUT_DIR || process.env.MAKEFUN_OUTPUT_DIR || '/output');
+const SHOT_NAMES = ['1-cover.jpg', '2-editor.jpg', '3-cover.jpg', '4-cover.jpg'];
+const SHOT_LIMIT = 262144;
 
-// Pre-flight: the dossier must never claim success over missing or
-// oversized screenshots. A broken render once produced 50 KB placeholder
-// shots with no error; fail loudly here instead of shipping those.
-if (!existsSync(join(here, 'app'))) throw new Error('app/ missing — nothing to submit');
-const shotsDir = join(here, 'screenshots');
-if (!existsSync(shotsDir)) throw new Error('screenshots/ missing — run the shot script first');
-for (const name of ['1-cover.jpg', '2-editor.jpg', '3-cover.jpg', '4-cover.jpg']) {
-  const p = join(shotsDir, name);
-  if (!existsSync(p)) throw new Error(`screenshot ${name} missing — run the shot script first`);
-  const size = statSync(p).size;
-  if (size > 262144) throw new Error(`screenshot ${name} is ${size} bytes, over the 262144 limit`);
+// The dossier must never claim success over a missing or oversized
+// screenshot. A broken render once produced 50 KB placeholder shots
+// with no error; fail loudly here instead of shipping those.
+function checkShots(dir) {
+  if (!existsSync(dir)) throw new Error('screenshots/ missing — run the shot script first');
+  for (const name of SHOT_NAMES) {
+    const p = join(dir, name);
+    if (!existsSync(p)) throw new Error(`screenshot ${name} missing — run the shot script first`);
+    const bytes = statSync(p).size;
+    if (bytes > SHOT_LIMIT) throw new Error(`screenshot ${name} is ${bytes} bytes, over the ${SHOT_LIMIT} limit`);
+  }
 }
 
-mkdirSync(out, { recursive: true });
-for (const name of ['app', 'screenshots']) {
-  const src = join(here, name);
-  const dst = join(out, name);
+function stageDir(name) {
+  const src = join(ROOT, name);
+  const dst = join(OUT, name);
   rmSync(dst, { recursive: true, force: true });
   if (existsSync(src)) cpSync(src, dst, { recursive: true });
 }
 
-const dossier = buildDossier(out, {
+if (!existsSync(join(ROOT, 'app'))) throw new Error('app/ missing — nothing to submit');
+checkShots(join(ROOT, 'screenshots'));
+
+mkdirSync(OUT, { recursive: true });
+stageDir('app');
+stageDir('screenshots');
+
+const dossier = buildDossier(OUT, {
   text_max_bytes: 163840,
   screenshots: { max: 4, max_bytes: 262144 },
   app_max_files: 993,
   app_max_bytes: 50331648,
   app_path_max_bytes: 1000,
 });
-writeFileSync(join(out, 'dossier.json'), dossier);
-console.log(`dossier written to ${join(out, 'dossier.json')}`);
+writeFileSync(join(OUT, 'dossier.json'), dossier);
+console.log(`dossier written to ${join(OUT, 'dossier.json')}`);

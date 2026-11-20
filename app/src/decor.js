@@ -1,9 +1,9 @@
-// decor.js — all vector art and stickers.
-// Every random choice comes from a small seeded generator, so the same cover
-// always paints the same pixels. Scene action pins to the top corners and
-// the lower half — never across a face.
+// decor.js — all vector art and stickers for Vice Cover Studio v26.
+// Every random choice comes from a small seeded generator, so the same
+// cover always paints the same pixels. Scene action pins to the top
+// corners and the lower half — never across a face.
 
-export function rng(seed) {
+export function seeded(seed) {
   let a = (seed >>> 0) || 1;
   return () => {
     a |= 0; a = (a + 0x6D2B79F5) | 0;
@@ -19,7 +19,7 @@ const CYAN = '#00E5FF';
 const GOLD = '#FFD60A';
 const ORANGE = '#FF7A18';
 
-export function starPath(ctx, cx, cy, r, rot = -Math.PI / 2) {
+export function starOutline(ctx, cx, cy, r, rot = -Math.PI / 2) {
   ctx.beginPath();
   for (let i = 0; i < 10; i++) {
     const rr = i % 2 === 0 ? r : r * 0.45;
@@ -30,14 +30,14 @@ export function starPath(ctx, cx, cy, r, rot = -Math.PI / 2) {
   ctx.closePath();
 }
 
-export function drawStar(ctx, cx, cy, r, fill = GOLD, stroke = INK, lw = 1) {
-  starPath(ctx, cx, cy, r);
+export function paintStar(ctx, cx, cy, r, fill = GOLD, stroke = INK, lw = 1) {
+  starOutline(ctx, cx, cy, r);
   ctx.fillStyle = fill; ctx.fill();
   if (lw > 0) { ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke(); }
 }
 
 // Four-point sparkle star.
-export function sparkle(ctx, cx, cy, r, fill = '#FFFFFF') {
+export function paintSpark(ctx, cx, cy, r, fill = '#FFFFFF') {
   ctx.fillStyle = fill;
   ctx.beginPath();
   ctx.moveTo(cx, cy - r); ctx.quadraticCurveTo(cx, cy, cx + r, cy);
@@ -46,7 +46,7 @@ export function sparkle(ctx, cx, cy, r, fill = '#FFFFFF') {
   ctx.fill();
 }
 
-export function drawBird(ctx, x, y, s, color = INK) {
+export function paintBird(ctx, x, y, s, color = INK) {
   ctx.strokeStyle = color; ctx.lineWidth = Math.max(1, s * 0.14);
   ctx.lineCap = 'round';
   ctx.beginPath();
@@ -56,7 +56,7 @@ export function drawBird(ctx, x, y, s, color = INK) {
   ctx.stroke();
 }
 
-export function drawPlane(ctx, x, y, s, color = '#FFFFFF') {
+export function paintPlane(ctx, x, y, s, color = '#FFFFFF') {
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(x - s, y);
@@ -71,7 +71,7 @@ export function drawPlane(ctx, x, y, s, color = '#FFFFFF') {
   ctx.closePath(); ctx.fill();
 }
 
-export function drawMoon(ctx, cx, cy, r) {
+export function paintMoon(ctx, cx, cy, r) {
   const halo = ctx.createRadialGradient(cx, cy, r * 0.4, cx, cy, r * 2.4);
   halo.addColorStop(0, 'rgba(255,244,214,0.5)');
   halo.addColorStop(1, 'rgba(255,244,214,0)');
@@ -88,7 +88,7 @@ export function drawMoon(ctx, cx, cy, r) {
 
 // Palm silhouette: tapered trunk curving to one side, long fronds arcing
 // from the top. lean > 0 bends right, flip mirrors it.
-export function drawPalm(ctx, bx, by, h, lean = 0.12, flip = false, color = INK) {
+export function paintPalm(ctx, bx, by, h, lean = 0.12, flip = false, color = INK) {
   const s = flip ? -1 : 1;
   const topX = bx + lean * h * s, topY = by - h;
   ctx.strokeStyle = color; ctx.fillStyle = color;
@@ -116,7 +116,7 @@ export function drawPalm(ctx, bx, by, h, lean = 0.12, flip = false, color = INK)
   ctx.beginPath(); ctx.arc(topX + h * 0.035, topY + h * 0.035, h * 0.025, 0, Math.PI * 2); ctx.fill();
 }
 
-export function drawMoneyBill(ctx, cx, cy, w, rot = 0) {
+export function paintBill(ctx, cx, cy, w, rot = 0) {
   ctx.save();
   ctx.translate(cx, cy); ctx.rotate(rot);
   ctx.fillStyle = GOLD;
@@ -128,7 +128,7 @@ export function drawMoneyBill(ctx, cx, cy, w, rot = 0) {
   ctx.restore();
 }
 
-export function drawCar(ctx, cx, floorY, w) {
+export function paintCar(ctx, cx, floorY, w) {
   const h = w * 0.30;
   const x0 = cx - w / 2, y0 = floorY - h;
   ctx.save();
@@ -182,7 +182,7 @@ export function drawCar(ctx, cx, floorY, w) {
 // A neon sign that always fits: the font shrinks until the word fits the
 // allowed width, and the box hugs the text instead of forcing a tall
 // narrow box that the word can never fit.
-function neonSign(ctx, x, y, maxW, maxH, word, color) {
+function neonTag(ctx, x, y, maxW, maxH, word, color) {
   let fs = maxH * 0.55;
   ctx.font = `900 ${fs}px Arial`;
   const fitW = maxW * 0.88;
@@ -205,7 +205,7 @@ function neonSign(ctx, x, y, maxW, maxH, word, color) {
   ctx.restore();
 }
 
-function crowdRow(ctx, x, y, w, h, count, rand) {
+function crowdLine(ctx, x, y, w, h, count, rand) {
   ctx.fillStyle = INK;
   for (let i = 0; i < count; i++) {
     const cx = x + (i + 0.5) / count * w + (rand() - 0.5) * w * 0.04;
@@ -220,36 +220,37 @@ function crowdRow(ctx, x, y, w, h, count, rand) {
 }
 
 // Scene art dispatch by panel tag. rect is {x,y,w,h} in px; seed varies art.
-export function drawScene(ctx, tag, rect, night, seed, index) {
+export function sceneArt(ctx, tag, rect, night, seed, index) {
   const { x, y, w, h } = rect;
-  const rand = rng(seed * 7919 + index * 131 + 7);
+  const rand = seeded(seed * 7919 + index * 131 + 7);
   const s = Math.min(w, h);
   if (tag === 'hero') {
     if (night) {
-      drawMoon(ctx, x + w * 0.86, y + h * 0.14, s * 0.10);
+      paintMoon(ctx, x + w * 0.86, y + h * 0.14, s * 0.10);
       for (let i = 0; i < 10; i++) {
-        sparkle(ctx, x + w * (0.05 + rand() * 0.85), y + h * (0.02 + rand() * 0.16), s * (0.008 + rand() * 0.01));
+        paintSpark(ctx, x + w * (0.05 + rand() * 0.85), y + h * (0.02 + rand() * 0.16), s * (0.008 + rand() * 0.01));
       }
     }
-    // NOTE: no daytime birds in the hero panel — a bird row here used to
-    // sit behind the VICE CITY badge and its wing-tips peeked out above
-    // the badge like cut-off letters. Birds live on in skyline/sea scenes.
-    drawPalm(ctx, x + w * 0.06, y + h, h * 0.52, 0.14, false);
-    drawMoneyBill(ctx, x + w * 0.86, y + h * 0.86, s * 0.075, 0.3);
-    drawMoneyBill(ctx, x + w * 0.76, y + h * 0.92, s * 0.06, -0.4);
+    // NOTE: no birds in the hero panel, day or night. A bird row here
+    // once sat behind the VICE CITY badge and its wing-tips peeked out
+    // above the badge like cut-off letters. Birds live on in the
+    // skyline, beach and vignette scenes only.
+    paintPalm(ctx, x + w * 0.06, y + h, h * 0.52, 0.14, false);
+    paintBill(ctx, x + w * 0.86, y + h * 0.86, s * 0.075, 0.3);
+    paintBill(ctx, x + w * 0.76, y + h * 0.92, s * 0.06, -0.4);
   } else if (tag === 'skyline') {
     // NO buildings, NO towers, NO skyline row — sky art only.
     if (night) {
       for (let i = 0; i < 7; i++) {
-        sparkle(ctx, x + w * (0.08 + rand() * 0.84), y + h * (0.06 + rand() * 0.2), s * (0.008 + rand() * 0.009));
+        paintSpark(ctx, x + w * (0.08 + rand() * 0.84), y + h * (0.06 + rand() * 0.2), s * (0.008 + rand() * 0.009));
       }
     } else {
-      for (let i = 0; i < 3; i++) drawBird(ctx, x + w * (0.12 + i * 0.12 + rand() * 0.04), y + h * (0.10 + rand() * 0.08), s * 0.04);
-      drawPlane(ctx, x + w * 0.72, y + h * 0.16, s * 0.05);
+      for (let i = 0; i < 3; i++) paintBird(ctx, x + w * (0.12 + i * 0.12 + rand() * 0.04), y + h * (0.10 + rand() * 0.08), s * 0.04);
+      paintPlane(ctx, x + w * 0.72, y + h * 0.16, s * 0.05);
     }
   } else if (tag === 'car') {
     const cw = Math.min(w * 0.86, h * 2.4);
-    drawCar(ctx, x + w * 0.5, y + h * 0.97, cw);
+    paintCar(ctx, x + w * 0.5, y + h * 0.97, cw);
   } else if (tag === 'beach') {
     const hy = y + h * 0.62;
     const sea = ctx.createLinearGradient(0, hy, 0, y + h);
@@ -289,8 +290,8 @@ export function drawScene(ctx, tag, rect, night, seed, index) {
     ctx.lineTo(x + w * 0.78, hy + h * 0.02);
     ctx.lineTo(x + w * 0.83, hy + h * 0.10);
     ctx.closePath(); ctx.fill();
-    drawPalm(ctx, x + w * 0.96, y + h, h * 0.42, -0.16, true);
-    for (let i = 0; i < 3; i++) drawBird(ctx, x + w * (0.08 + i * 0.06), y + h * (0.06 + rand() * 0.03), s * 0.03);
+    paintPalm(ctx, x + w * 0.96, y + h, h * 0.42, -0.16, true);
+    for (let i = 0; i < 3; i++) paintBird(ctx, x + w * (0.08 + i * 0.06), y + h * (0.06 + rand() * 0.03), s * 0.03);
   } else if (tag === 'street') {
     // Sagging wires across the top.
     ctx.strokeStyle = 'rgba(13,0,26,0.9)'; ctx.lineWidth = Math.max(1, s * 0.008);
@@ -306,8 +307,8 @@ export function drawScene(ctx, tag, rect, night, seed, index) {
     const words = ['MOTEL', 'BAR', '24H', 'DINER', 'CLUB', 'LIQUOR'];
     const cols = [PINK, CYAN, GOLD];
     const sw = w * 0.30, sh = Math.min(h * 0.16, w * 0.22);
-    neonSign(ctx, x + w * 0.04, y + h * 0.03, sw, sh, words[Math.floor(rand() * words.length)], cols[0]);
-    neonSign(ctx, x + w * 0.66, y + h * 0.06, sw, sh, words[Math.floor(rand() * words.length)], cols[1]);
+    neonTag(ctx, x + w * 0.04, y + h * 0.03, sw, sh, words[Math.floor(rand() * words.length)], cols[0]);
+    neonTag(ctx, x + w * 0.66, y + h * 0.06, sw, sh, words[Math.floor(rand() * words.length)], cols[1]);
     // Street lamp at the right edge, glowing gold bulb.
     const lx = x + w * 0.93, ly = y + h * 0.42;
     ctx.strokeStyle = INK; ctx.lineWidth = Math.max(2, s * 0.012);
@@ -319,7 +320,7 @@ export function drawScene(ctx, tag, rect, night, seed, index) {
     ctx.fillStyle = GOLD;
     ctx.beginPath(); ctx.arc(lx, ly, s * 0.025, 0, Math.PI * 2); ctx.fill();
     // Crowd along the bottom.
-    crowdRow(ctx, x + w * 0.06, y + h * 0.99, w * 0.8, h * 0.16, 5 + Math.floor(rand() * 4), rand);
+    crowdLine(ctx, x + w * 0.06, y + h * 0.99, w * 0.8, h * 0.16, 5 + Math.floor(rand() * 4), rand);
     // Neon reflections on the wet road.
     ctx.fillStyle = 'rgba(255,46,136,0.18)';
     ctx.fillRect(x + w * 0.1, y + h * 0.9, w * 0.2, h * 0.05);
@@ -343,11 +344,11 @@ export function drawScene(ctx, tag, rect, night, seed, index) {
       ctx.lineTo(hx + s * 0.12, y + h * 0.95);
       ctx.lineTo(hx - s * 0.12, y + h * 0.95);
       ctx.closePath(); ctx.fill();
-      drawBird(ctx, x + w * 0.7, y + h * 0.2, s * 0.035);
-      drawBird(ctx, x + w * 0.82, y + h * 0.3, s * 0.03);
+      paintBird(ctx, x + w * 0.7, y + h * 0.2, s * 0.035);
+      paintBird(ctx, x + w * 0.82, y + h * 0.3, s * 0.03);
     } else if (variant === 1) {
       for (let i = 0; i < 7; i++) {
-        drawMoneyBill(ctx, x + w * (0.12 + rand() * 0.76), y + h * (0.55 + rand() * 0.35), s * 0.07, (rand() - 0.5) * 1.2);
+        paintBill(ctx, x + w * (0.12 + rand() * 0.76), y + h * (0.55 + rand() * 0.35), s * 0.07, (rand() - 0.5) * 1.2);
       }
     } else if (variant === 2) {
       // Police light-bar pill (VICE PD) pinned to the bottom edge, plus
@@ -368,7 +369,7 @@ export function drawScene(ctx, tag, rect, night, seed, index) {
       ctx.restore();
       const bills = [[0.14, 0.72, 0.3], [0.38, 0.78, -0.25], [0.68, 0.72, 0.2]];
       for (const [fx, fy, rot] of bills) {
-        drawMoneyBill(ctx, x + w * fx, y + h * fy, s * 0.055, rot);
+        paintBill(ctx, x + w * fx, y + h * fy, s * 0.055, rot);
       }
     } else {
       // Duffel bag + money.
@@ -382,14 +383,14 @@ export function drawScene(ctx, tag, rect, night, seed, index) {
       ctx.stroke();
       ctx.lineWidth = Math.max(1.5, s * 0.01);
       for (let i = 0; i < 3; i++) {
-        drawMoneyBill(ctx, x + w * (0.2 + i * 0.3), y + h * 0.9, s * 0.055, (rand() - 0.5) * 0.9);
+        paintBill(ctx, x + w * (0.2 + i * 0.3), y + h * 0.9, s * 0.055, (rand() - 0.5) * 0.9);
       }
     }
   }
 }
 
 // Faint halftone dot pattern over a panel.
-export function halftonePanel(ctx, x, y, w, h, alpha = 0.10) {
+export function dotPanel(ctx, x, y, w, h, alpha = 0.10) {
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.fillStyle = '#FFFFFF';
@@ -403,7 +404,7 @@ export function halftonePanel(ctx, x, y, w, h, alpha = 0.10) {
 }
 
 // Halftone dot clusters in the cover corners.
-export function halftoneCorners(ctx, W, H) {
+export function dotCorners(ctx, W, H) {
   ctx.save();
   ctx.fillStyle = 'rgba(255,255,255,0.16)';
   const corners = [[0, 0, 1, 1], [W, 0, -1, 1], [0, H, 1, -1], [W, H, -1, -1]];
@@ -420,8 +421,8 @@ export function halftoneCorners(ctx, W, H) {
 }
 
 // Fine film grain over everything.
-export function grain(ctx, W, H, seed) {
-  const rand = rng(seed + 99);
+export function filmGrain(ctx, W, H, seed) {
+  const rand = seeded(seed + 99);
   ctx.save();
   ctx.globalAlpha = 0.05;
   for (let i = 0; i < W * H / 900; i++) {
@@ -433,7 +434,7 @@ export function grain(ctx, W, H, seed) {
 
 // ---- Stickers ----
 
-export function viceCityBadge(ctx, W, H) {
+export function badgeVice(ctx, W, H) {
   const S = Math.min(W, H);
   const bw = S * 0.26, bh = S * 0.08;
   const cx = W * 0.045 + bw / 2, cy = H * 0.05 + bh / 2;
@@ -444,7 +445,7 @@ export function viceCityBadge(ctx, W, H) {
   ctx.beginPath();
   if (ctx.roundRect) ctx.roundRect(-bw / 2, -bh / 2, bw, bh, bh * 0.45); else ctx.rect(-bw / 2, -bh / 2, bw, bh);
   ctx.fill(); ctx.stroke();
-  drawStar(ctx, -bw / 2 + bh * 0.55, 0, bh * 0.30, PINK, null, 0);
+  paintStar(ctx, -bw / 2 + bh * 0.55, 0, bh * 0.30, PINK, null, 0);
   ctx.fillStyle = '#FFFFFF';
   ctx.font = `900 ${bh * 0.52}px 'Noto Sans Condensed Black', 'Arial Black', sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -452,7 +453,7 @@ export function viceCityBadge(ctx, W, H) {
   ctx.restore();
 }
 
-export function leonidaBadge(ctx, W, H) {
+export function badgeLeonida(ctx, W, H) {
   const S = Math.min(W, H);
   const r = S * 0.075;
   const cx = W - W * 0.055, cy = H * 0.055 + r * 0.4;
@@ -464,7 +465,7 @@ export function leonidaBadge(ctx, W, H) {
   ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
   ctx.lineWidth = Math.max(1, S * 0.003); ctx.strokeStyle = CYAN;
   ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, Math.PI * 2); ctx.stroke();
-  drawStar(ctx, 0, -r * 0.42, r * 0.30, GOLD, null, 0);
+  paintStar(ctx, 0, -r * 0.42, r * 0.30, GOLD, null, 0);
   ctx.fillStyle = '#FFFFFF';
   ctx.font = `900 ${r * 0.34}px 'Noto Sans Condensed Black', 'Arial Black', sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -472,17 +473,17 @@ export function leonidaBadge(ctx, W, H) {
   ctx.restore();
 }
 
-export function starsRow(ctx, W, H) {
+export function starRow(ctx, W, H) {
   const S = Math.min(W, H);
   const r = S * 0.019;
   const step = Math.max(W * 0.0375, S * 0.039);
   const y = H * 0.165;
   for (let i = 0; i < 5; i++) {
-    drawStar(ctx, W * 0.05 + i * step, y, r, GOLD, INK, Math.max(1, S * 0.002));
+    paintStar(ctx, W * 0.05 + i * step, y, r, GOLD, INK, Math.max(1, S * 0.002));
   }
 }
 
-export function palmBadge(ctx, W, H) {
+export function badgePalm(ctx, W, H) {
   const S = Math.min(W, H);
   const r = S * 0.062;
   const cx = W - W * 0.05, cy = H - H * 0.05;
@@ -492,6 +493,6 @@ export function palmBadge(ctx, W, H) {
   ctx.lineWidth = Math.max(2, S * 0.004); ctx.strokeStyle = CYAN;
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
   ctx.translate(cx, cy + r * 0.28);
-  drawPalm(ctx, 0, 0, r * 1.15, 0.1, false, CYAN);
+  paintPalm(ctx, 0, 0, r * 1.15, 0.1, false, CYAN);
   ctx.restore();
 }

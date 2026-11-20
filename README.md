@@ -5,10 +5,11 @@
 [![reward](https://make.fun/badge/gta6-cover-art-01/Rahullpc/gta6-cover-art/reward.svg)](https://make.fun/bounty/gta6-cover-art-01)
 
 Vice Cover Studio turns your photos into a GTA 6-style multi-panel comic
-cover and exports it as a PNG. Pick one to five photos, choose a layout and
-a colour grade, write a caption, and export the cover in Square, Portrait,
-or Landscape post sizes. Everything runs fully offline in a desktop browser
-from the static files in `app/` — your photos never leave the machine.
+cover and exports it as a PNG. Pick one to five photos, choose a layout
+and a colour grade, write a caption, and export the cover in Square,
+Portrait, or Landscape post sizes. Everything runs fully offline in a
+desktop browser from the static files in `app/` — your photos never
+leave the machine.
 
 Built for the [gta6-cover-art-01 bounty](https://make.fun/bounty/gta6-cover-art-01)
 on make.fun. Referral code: `89wzjn6w`.
@@ -28,7 +29,7 @@ press **PNG 1080×1080**, **PNG 1080×1350**, or **PNG 1920×1080** — or
 **Export all 3 sizes** to download all three at once. Files are named
 `vice-cover-<width>x<height>.png`.
 
-## Features
+## What it does
 
 - Multi-panel comic covers from 1–5 photos
 - Face-safe framing: a head is always whole or absent, never half-cut
