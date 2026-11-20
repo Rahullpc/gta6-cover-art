@@ -1,4 +1,4 @@
-// GTA 6 Cover Art v6 — multi-panel cover maker + 4 samples (gta6-cover-art-01), by Tedy.
+// GTA 6 Cover Art v7 — multi-panel cover maker + 4 samples (gta6-cover-art-01), by Tedy.
 // Vice Cover Studio turns 1-5 photos + a caption into a GTA-style comic cover and exports PNG
 // in three post sizes (1080x1080, 1080x1350, 1920x1080), fully offline in desktop Chrome.
 // v6 over v5: one art-direction fix, by order of the boss — the row of black skyline buildings
