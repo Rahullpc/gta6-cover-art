@@ -1,8 +1,9 @@
-// main.js — boot Vice Cover Studio v4: create the state, wire the editor, wait
+// main.js — boot Vice Cover Studio v5: create the state, wire the editor, wait
 // for the bundled display font, then either run a ?shot= screenshot scene or
 // load the four sample photos with the default concept so the first paint is a
-// full, face-safe cover (now five panels on Sunset Hero — the red car panel is
-// gone and the beach photo extends left).
+// full, face-safe cover. v5's first paint shows the new art direction: five
+// wanted stars under the VICE CITY badge and a sun-free sunset sky (the night
+// moon is untouched). Sunset Hero still tiles five panels — no red car panel.
 
 import { createState, applyPreset, presetById, PRESETS, activeEdits } from './state.js';
 import { initEditor } from './editor.js';

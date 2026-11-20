@@ -1,4 +1,4 @@
-// grades.js — six loud colour grades (v4, look unchanged from v2/v3).
+// grades.js — six loud colour grades (v5; the look is unchanged from v2/v3/v4).
 //
 // A grade is two things: a canvas filter string applied while the photo draws,
 // and an ordered stack of composite washes laid over the panel afterwards. `k`
@@ -10,9 +10,10 @@
 // survives; magenta/cyan appear only as corner glows. Teal Noir is cool-dominant
 // the same way.
 //
-// v4 declares each grade as data (filter coefficients + wash steps in a compact
-// tagged shape) and runs them through one interpreter. The canvas calls — and
-// therefore the pixels — are identical to v3.
+// Each grade is declared as data (filter coefficients + wash steps in a compact
+// tagged shape) and run through one interpreter. The canvas calls — and
+// therefore the pixels — are identical to v4; v5's sun removal happens in the
+// scene layer above these washes, not here.
 
 // rgba() with the intensity baked into the alpha channel.
 const tint = (r, g, b, a, k) => `rgba(${r},${g},${b},${(a * k).toFixed(3)})`;
@@ -124,10 +125,7 @@ for (const grade of GRADES) {
 }
 
 export function gradeById(id) {
-  for (const grade of GRADES) {
-    if (grade.id === id) return grade;
-  }
-  return GRADES[0];
+  return GRADES.find((grade) => grade.id === id) ?? GRADES[0];
 }
 
 /** Run a grade's wash stack inside the current clip; restores composite op. */

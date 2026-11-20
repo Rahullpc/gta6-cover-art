@@ -1,15 +1,18 @@
-// GTA 6 Cover Art v4 — multi-panel cover maker + 4 samples (gta6-cover-art-01), by Tedy.
+// GTA 6 Cover Art v5 — multi-panel cover maker + 4 samples (gta6-cover-art-01), by Tedy.
 // Vice Cover Studio turns 1-5 photos + a caption into a GTA-style comic cover and exports PNG
 // in three post sizes (1080x1080, 1080x1350, 1920x1080), fully offline in desktop Chrome.
-// v4 over v3: one art-direction fix — the Sunset Beach Heist cover (sunset-hero layout) drops
-// its red car panel + black car silhouette from the bottom strip. The strip is now beach +
-// street with the old car share redistributed proportionally (32:28), so the beach photo
-// extends left into the freed space; the preset's crop list remaps 6 -> 5 slots and the crop
-// cache regenerates stale lists. Every other layout keeps its car panel, and all v3 guarantees
-// hold: four bundled samples (boulevard, pier, porsche, summer) with measured head boxes in the
-// face-safe framing engine (app/src/framing.js), faces whole-or-absent (never half-cut), crisp
-// comic borders, fully cold Neon Night, and a control rail that scrolls cleanly at 1280x720
-// with a visible draggable thumb.
+// v5 over v4: two art-direction fixes. (1) The wanted-level sticker is now a full FIVE gold
+// stars — a neat, evenly spaced row below the VICE CITY badge (app/src/decor.js stickerStars),
+// sized and placed so neighbours, the badge and every face stay clear; the badge's own small
+// pink star and the LEONIDA star are logo parts, not wanted stars. (2) The retro striped
+// synthwave sun is removed from every day-grade sky (both drawSun call sites and the painter
+// itself are gone); skies show the graded photo plus birds/plane/skyline/palms, and the Neon
+// Night moon is untouched. Vice Strip keeps stars:false; golden-duo shares the five-star row
+// and the sun-free sky, consistently. All v4 guarantees hold: the Sunset Hero strip is beach +
+// street (no car panel), four bundled samples (boulevard, pier, porsche, summer) with measured
+// head boxes in the face-safe framing engine (app/src/framing.js), faces whole-or-absent
+// (never half-cut), crisp comic borders, fully cold Neon Night, and a control rail that
+// scrolls cleanly at 1280x720 with a visible draggable thumb.
 // A working gta6-cover-art-01 entry (Node 22, standard library only): the app is this directory's app/ folder, plain
 // static files a desktop browser loads offline (app/index.html and its ES modules, no library and no network
 // request), and the program hands it in. It copies app/ and screenshots/ from beside this file to /output and writes

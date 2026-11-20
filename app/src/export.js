@@ -1,6 +1,7 @@
-// export.js — PNG export (v4). Render the cover at a post size on a fresh canvas
+// export.js — PNG export (v5). Render the cover at a post size on a fresh canvas
 // and hand it to the browser as a download. The very same renderCover() call
-// paints the live preview, so the saved file matches the editor pixel for pixel.
+// paints the live preview, so the saved file matches the editor pixel for pixel
+// — including the v5 five-star wanted row and the sun-free day skies.
 
 import { renderToCanvas } from './cover.js';
 import { SIZES, sizeById } from './state.js';

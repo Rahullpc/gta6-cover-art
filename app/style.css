@@ -1,9 +1,10 @@
-/* Vice Cover Studio v4 — dark studio theme. The control rail stays compact and
+/* Vice Cover Studio v5 — dark studio theme. The control rail stays compact and
    legible at 1280x720. A bright, always-visible, draggable scroll thumb replaces
    the native overlay scrollbar (which disappears in headless shots); sections
    are tightly spaced and the crop section auto-scrolls into view when a panel
-   is picked, so sections 4-7 stay reachable on a short viewport. Values match
-   v3 so the editor looks identical; only the Sunset Hero cover art changed. */
+   is picked, so sections 4-7 stay reachable on a short viewport. Every value
+   matches v4 so the editor chrome is pixel-identical — v5 only changes the
+   cover art (five wanted stars, no sunset sun). */
 
 /* Bundled OFL display face — loaded from app/fonts, never from the network. */
 @font-face {

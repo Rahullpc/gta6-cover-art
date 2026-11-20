@@ -1,4 +1,5 @@
-// framing.js — the face-safe crop kernel (v4, math unchanged from v3).
+// framing.js — the face-safe crop kernel (v5; the geometry is unchanged from
+// v3/v4, only the surrounding prose is new).
 //
 // One rule governs every panel: a head is either fully on screen or fully off
 // it — a half-sliced face is never a legal result. The kernel knows where each
@@ -16,8 +17,8 @@
 //
 // The math is pure image-pixel geometry; the renderer draws the returned frame
 // and the editor inverts it for dragging, keeping preview, drag and export in
-// sync. v4 reorganises the kernel into small axis helpers; every numeric
-// expression — and therefore every frame — is identical to v3.
+// sync. Every numeric expression below is identical to v4, so every frame —
+// and therefore every pixel of every photo — is unchanged in v5.
 
 export function clamp(value, lo, hi) {
   return Math.min(hi, Math.max(lo, value));
@@ -187,7 +188,7 @@ function axisSpan(lo, hi, centre, anchor, win) {
 // Shared pan-span algebra. The cover crop feeds bounds clamped to the image;
 // the blur plate feeds raw bounds (its window may exceed the photo, so negative
 // origins are legal). Keeping the clamp at the call site preserves the two
-// modes' distinct behaviour.
+// modes' distinct behaviour — do not unify them.
 function panSpan(loX, hiX, loY, hiY, head, winW, winH, ax, ay) {
   const sx = axisSpan(loX, hiX, head.cx, ax, winW);
   const sy = axisSpan(loY, hiY, head.cy, ay, winH);

@@ -1,16 +1,19 @@
-// cover.js — the ONE renderer behind both the live preview and the PNG export
-// (v4). Same canvas calls, same seeded decor, so what you see is exactly what
-// you get.
+// cover.js — the single renderer behind the live preview AND the PNG export
+// (v5). One code path, one set of seeded canvas calls: what the editor shows is
+// exactly what the export writes.
 //
-// Pipeline: panels (face-safe photo via framing.js + bold grade + scene action +
-// halftone) -> crisp comic borders -> foreground palms -> grain -> stickers ->
-// giant caption lettering -> (editor-only) selection highlight. The framing
-// engine guarantees a face is whole or absent in every panel; the renderer just
-// draws the frame it returns.
+// Pipeline: panels (face-safe photo via framing.js + bold grade + scene action
+// + halftone) -> crisp comic borders -> foreground palms -> grain -> stickers
+// -> giant caption lettering -> (editor-only) selection highlight. The framing
+// engine guarantees each panel shows a whole face or none; this renderer just
+// draws the frame it is handed.
 //
-// v4: the Sunset Hero tiling no longer has a car panel, so its bottom strip
-// renders beach + street only. The car scene art below is unchanged and still
-// serves every other layout that carries a car slot.
+// v5 art direction: the retro synthwave sun is gone from every day-grade sky.
+// heroArt and skylineArt no longer call any sun painter — the sky shows the
+// graded photo underneath, with birds / plane / skyline / palms still inked on
+// top. Night grades keep their moon and sparkles exactly as before. The other
+// v4 change holds: Sunset Hero's bottom strip is beach + street (no car panel),
+// while the car scene art still serves every layout that carries a car slot.
 
 import { layoutById } from './layouts.js';
 import { gradeById, paintGrade } from './grades.js';
@@ -18,7 +21,7 @@ import { activeEdits, clamp, sizeById } from './state.js';
 import { computeFrame, focusOf } from './framing.js';
 import { drawCaption } from './lettering.js';
 import {
-  drawSun, drawMoon, drawStars, drawPalm, drawBirds, drawPlane, drawSkyline,
+  drawMoon, drawStars, drawPalm, drawBirds, drawPlane, drawSkyline,
   drawCar, drawBeachScene, drawStreetScene, drawVignette, drawMoney,
   drawHalftone, drawPanelHalftone, drawGrain, drawPanelBorders,
   stickerViceCity, stickerLeonida, stickerStars, stickerPalm, drawPlaceholder,
@@ -26,7 +29,7 @@ import {
 
 const DISPLAY_FONT = '"Vice Display", "Arial Black", sans-serif';
 
-// Grades that read as night: the sky gets a moon and stars, not a sunset.
+// Grades that read as night: their skies get a moon and sparkles, never a sun.
 const NIGHT_GRADES = new Set(['neon-night', 'teal-noir', 'ultraviolet']);
 
 // Draw a photo into a panel using its face-safe frame. A blur-fill panel first
@@ -52,17 +55,16 @@ function drawPanelPhoto(ctx, img, p, frame) {
   ctx.drawImage(img, dx, dy, dw, dh);
 }
 
-// The vector action inked over a panel's graded photo, by scene tag. Faces sit
-// in the upper third (see framing.js), so scene action is pinned to the top
-// corners and the lower half — never across the face itself. Each handler is a
-// named function; the dispatch table maps scene tags to them.
+// The vector action inked over a panel's graded photo, dispatched by scene tag.
+// Faces sit in the upper third (framing.js), so scene action pins to the top
+// corners and the lower half — never across the face itself. v5: day skies are
+// sun-free; only birds, the plane, the skyline and palms remain up there.
 
 function heroArt(ctx, p, idx, night, m, seed) {
   if (night) {
     drawMoon(ctx, p.x + p.w * 0.86, p.y + p.h * 0.14, m * 0.1);
     drawStars(ctx, p.x + p.w * 0.05, p.y + p.h * 0.03, p.w * 0.9, p.h * 0.16, 10, seed);
   } else {
-    drawSun(ctx, p.x + p.w * 0.87, p.y + p.h * 0.14, m * 0.18, 0.9);
     drawBirds(ctx, p.x + p.w * 0.05, p.y + p.h * 0.04, p.w * 0.3, p.h * 0.12, 4, seed);
   }
   drawPalm(ctx, p.x + p.w * 0.03, p.y + p.h * 0.995, p.h * 0.4, 0.1);
@@ -74,7 +76,6 @@ function skylineArt(ctx, p, idx, night, m, seed) {
     drawStars(ctx, p.x + p.w * 0.05, p.y + p.h * 0.03, p.w * 0.9, p.h * 0.18, 7, seed + 4);
     drawSkyline(ctx, p.x, p.y + p.h * 0.56, p.w, p.h * 0.44, seed);
   } else {
-    drawSun(ctx, p.x + p.w * 0.84, p.y + p.h * 0.12, m * 0.13, 0.85);
     drawSkyline(ctx, p.x, p.y + p.h * 0.58, p.w, p.h * 0.42, seed);
     drawBirds(ctx, p.x + p.w * 0.4, p.y + p.h * 0.05, p.w * 0.4, p.h * 0.12, 3, seed + 2);
     drawPlane(ctx, p.x + p.w * 0.66, p.y + p.h * 0.12, m * 0.1);
@@ -160,7 +161,8 @@ function drawSelection(ctx, p, idx, s) {
   ctx.restore();
 }
 
-// Sticker dispatch, painted in the v3 order.
+// Sticker dispatch, painted in the established order. v5: `stars` now paints
+// the five-star wanted row (decor.js); the badge logos are unchanged.
 const STICKER_PAINT = {
   viceCity: stickerViceCity,
   leonida: stickerLeonida,

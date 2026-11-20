@@ -1,4 +1,4 @@
-// lettering.js — the giant comic caption (v4, rendering unchanged from v2/v3).
+// lettering.js — the giant comic caption (v5; rendering unchanged from v2/v3/v4).
 //
 // An ALL-CAPS display title plus a sub-caption line: white by default, fat black
 // outline, magenta + cyan double drop-shadow. The title auto-shrinks and wraps
@@ -6,9 +6,9 @@
 // it bleeds across panel borders without being covered by them. No overflow, no
 // clipped words, a slightly tighter skew and shadow.
 //
-// v4 keeps the two-pass shape (measure the block, then ink it) but splits the
-// work into smaller fit/place/paint helpers. Every size, offset and colour is
-// identical to v3.
+// The two-pass shape holds (measure the block, then ink it), split into small
+// fit/place/paint helpers. Every size, offset and colour is identical to v4 —
+// the v5 fixes touch stickers and sky decor, never the caption.
 
 const DISPLAY = '"Vice Display", "Arial Black", sans-serif';
 

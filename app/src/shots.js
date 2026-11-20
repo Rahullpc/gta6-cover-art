@@ -1,9 +1,11 @@
-// shots.js — reproducible screenshot scenes (v4).
+// shots.js — reproducible screenshot scenes (v5).
 // ?shot=cover renders the EXPORTED cover full-bleed (the exact export render
 // path, blitted to the viewport); ?shot=editor shows the full editor with photos
 // loaded. Extra params: photo=<sample>, caption=<title>, sub=<text>,
 // preset=<concept id>, size=<post size>. window.__shotReady flips true once
 // fonts, photos and paint are done, so a screenshot script can wait on it.
+// The scene mechanics are unchanged from v4 — the v5 art fixes ride along in
+// the renderer these scenes call.
 
 import { applyPreset, presetById, SIZES } from './state.js';
 

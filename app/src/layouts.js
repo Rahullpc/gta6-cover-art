@@ -1,14 +1,16 @@
-// layouts.js — poster tilings for Vice Cover Studio (v4).
+// layouts.js — the poster tilings for Vice Cover Studio (v5, geometry unchanged
+// from v4).
 //
 // Every tiling obeys the same contract: panels cover the sheet exactly (shared
 // edge coordinates, so no gaps and no overlaps), the hero slot owns roughly
 // half the area, and each panel carries a scene tag the renderer turns into
 // vector action. Borders stay straight; the asymmetry lives in panel sizes.
 //
-// v4 change: the Sunset Hero bottom strip drops its car panel. The strip is now
-// beach + street only, with the old car share redistributed proportionally
-// (32:28 of the former 32+28), so the beach photo extends left into the space
-// the red car panel used to occupy. All other tilings are untouched.
+// The v4 geometry holds: Sunset Hero's bottom strip is beach + street only
+// (weights 32:28, the old shares renormalised after the car panel was removed),
+// so the beach photo extends left into the freed space. Cinema keeps its
+// three-panel car/beach/street strip. v5 changes no coordinates — the star row
+// and the sun removal are renderer-side only.
 //
 // Building blocks: a panel record, a weighted axis run, an uneven 2x2 story
 // block, and a fraction-table helper for the fixed compositions.
@@ -58,7 +60,7 @@ function storyQuad(x, y, w, h, scenes, firstSlot) {
   });
 }
 
-// v4: the Sunset Hero action strip — beach then street, no car. Weights 32:28
+// The Sunset Hero action strip — beach then street, no car (v4). Weights 32:28
 // are the old beach:street shares renormalised over the full width.
 const beachStreetStrip = (top, tall, w) =>
   axisRun({ x: 0, y: top, w, h: tall }, [32, 28], ['beach', 'street'], 'x', 3);
@@ -71,7 +73,7 @@ export const LAYOUTS = [
   {
     id: 'sunset-hero',
     name: 'Sunset Hero',
-    blurb: 'Dominant hero top-left, skyline and vignette on the right, beach + street strip below (v4: no car panel).',
+    blurb: 'Dominant hero top-left, skyline and vignette on the right, beach + street strip below (no car panel).',
     panels(w, h) {
       if (isWide(w, h)) {
         const faces = fromFractions([
@@ -165,24 +167,19 @@ export const LAYOUTS = [
 ];
 
 export function layoutById(id) {
-  for (const layout of LAYOUTS) {
-    if (layout.id === id) return layout;
-  }
-  return LAYOUTS[0];
+  return LAYOUTS.find((layout) => layout.id === id) ?? LAYOUTS[0];
 }
 
 /**
  * Fresh crops for a layout: photos round-robin by slot, zoom 1, centred pan.
  * Face-safe by construction — computeFrame() protects the head even at zoom 1,
  * so switching to a brand-new layout never opens on a cut face. The panel count
- * comes from the tiling itself, so it always matches the layout (v4: Sunset
- * Hero yields five crops, not six).
+ * comes from the tiling itself, so it always matches the layout (Sunset Hero
+ * yields five crops, not six).
  */
 export function defaultEdits(layout, photoCount) {
   const n = Math.max(1, photoCount);
-  const fresh = [];
-  for (const p of layout.panels(1000, 1000)) {
-    fresh.push({ photo: p.slot % n, zoom: 1, panX: 0, panY: 0 });
-  }
-  return fresh;
+  return layout.panels(1000, 1000).map((p) => ({
+    photo: p.slot % n, zoom: 1, panX: 0, panY: 0,
+  }));
 }

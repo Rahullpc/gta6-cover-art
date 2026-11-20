@@ -1,29 +1,31 @@
-// decor.js — the poster's vector art, all Canvas 2D and fully deterministic (v4).
+// decor.js — Vice Cover Studio's vector art layer (v5). Everything here is
+// deterministic Canvas 2D: a seeded mulberry32 stream drives each scatter, so
+// the editor preview and the exported PNG always agree pixel for pixel.
 //
-// A seeded PRNG drives every scatter (stars, birds, windows, money, crowds) so
-// the live preview and the exported PNG are pixel-identical. Each panel gets
-// action: striped synthwave sun, palms, neon skyline, a sport car with tire
-// smoke, a beach jetski, neon street signs with a crowd, helicopter / money /
-// police / duffel vignettes, a tiny plane, halftone dots, film grain, crisp
-// comic borders, badges.
+// The vocabulary: moon + sparkles for night skies, palms, birds, a prop plane,
+// a neon skyline, a sport car with tire smoke, a beach jetski, neon street
+// signs with a crowd, helicopter / money / police / duffel vignettes, halftone
+// dots, film grain, crisp comic borders and the sticker badges.
 //
-// Borders are straight and uniform (neat, not jittered); hero decor is pinned
-// to corners / the lower half so it never covers a face, which the framing
-// engine seats in the upper third.
+// v5 art direction: the striped synthwave sun is retired — day skies now show
+// only the photo/grade underneath plus birds, plane, skyline and palms. The
+// wanted-level sticker is a full five-star row (GTA's max heat), laid out as a
+// neat evenly spaced line under the VICE CITY badge instead of the old three-
+// star random scatter. The night moon is untouched.
 //
-// v4 reorganises the art into a drawing vocabulary, point helpers and
-// collect-then-draw scatter loops. Every canvas call, colour, seed, control
-// point and composite order is unchanged from v3, so the pixels match exactly.
-// The two single-path multi-arc fills (halftone dot tile, palm nuts) keep their
-// one beginPath / two arcs / one fill shape — splitting them would shift the
-// anti-aliasing by a sub-pixel. The car panel art stays: only the Sunset Hero
-// tiling stopped calling it (v4).
+// Drawing rules that keep the art face-safe and pixel-stable:
+//   * borders are straight and uniform; hero decor pins to corners / the lower
+//     half because the framing engine seats faces in the upper third;
+//   * the halftone dot tile and the palm nuts each stay ONE path with two arcs
+//     and ONE fill — splitting them would shift anti-aliasing by a sub-pixel;
+//   * every bezier control point and rnd() consumption order is preserved from
+//     v4, so unchanged regions render identically.
 
 const INK = '#0D001A';
 const DISPLAY = '"Vice Display", "Arial Black", sans-serif';
 const TAU = Math.PI * 2;
 
-/** mulberry32 PRNG: same seed, same poster, every render. */
+/** mulberry32: one seed, one poster, every render. */
 export function rng(seed) {
   let a = (seed >>> 0) || 1;
   return function () {
@@ -38,15 +40,19 @@ export function rng(seed) {
 
 /* ------------------------------------------------- drawing vocabulary */
 
-function fillDisc(c, x, y, r) {
+// One arc path, reused by the fill and stroke disc helpers below.
+function arcPath(c, x, y, r) {
   c.beginPath();
   c.arc(x, y, r, 0, TAU);
+}
+
+function fillDisc(c, x, y, r) {
+  arcPath(c, x, y, r);
   c.fill();
 }
 
 function strokeRing(c, x, y, r) {
-  c.beginPath();
-  c.arc(x, y, r, 0, TAU);
+  arcPath(c, x, y, r);
   c.stroke();
 }
 
@@ -59,6 +65,7 @@ function strokeSeg(c, x1, y1, x2, y2) {
   c.stroke();
 }
 
+// Build a closed shape and fill it in one go.
 function trace(c, build) {
   c.beginPath();
   build(c);
@@ -66,42 +73,11 @@ function trace(c, build) {
   c.fill();
 }
 
-// Radial gradient fill helper used by the glows below.
+// Radial gradient factory for the glow washes.
 function radialFill(c, x0, y0, r0, x1, y1, r1, stops) {
   const g = c.createRadialGradient(x0, y0, r0, x1, y1, r1);
   stops.forEach(([at, color]) => g.addColorStop(at, color));
   return g;
-}
-
-/* ------------------------------------------------------------------- sun */
-
-const SUN_STOPS = [[0, '#FFD60A'], [0.55, '#FF9E00'], [1, '#FF2E88']];
-
-/** Big striped synthwave sun with a warm glow, cut on an offscreen canvas. */
-export function drawSun(ctx, cx, cy, r, alpha = 0.92) {
-  const pad = 6;
-  const size = Math.ceil(r * 2 + pad * 2);
-  const off = document.createElement('canvas');
-  off.width = size;
-  off.height = size;
-  const c = off.getContext('2d');
-  const mid = size / 2;
-  const gy = mid - r * 0.2;
-  c.fillStyle = radialFill(c, mid, gy, r * 0.1, mid, mid, r, SUN_STOPS);
-  fillDisc(c, mid, mid, r);
-  // Cut the retro horizontal slits out of the lower half of the disc.
-  c.globalCompositeOperation = 'destination-out';
-  for (let i = 0; i < 7; i += 1) {
-    const sy = mid + r * (0.04 + i * 0.14);
-    const sh = r * (0.03 + i * 0.022);
-    fillBox(c, 0, sy, size, sh);
-  }
-  ctx.save();
-  ctx.shadowColor = '#FF7A18';
-  ctx.shadowBlur = r * 0.55;
-  ctx.globalAlpha = alpha;
-  ctx.drawImage(off, cx - mid, cy - mid);
-  ctx.restore();
 }
 
 /* ------------------------------------------------------------------ moon */
@@ -110,7 +86,7 @@ const MOON_HALO = [[0, 'rgba(0,229,255,0.3)'], [1, 'rgba(0,229,255,0)']];
 const MOON_BODY = [[0, '#F4FBFF'], [1, '#9FD8E8']];
 const CRATERS = [[-0.3, 0.1, 0.18], [0.25, -0.25, 0.12], [0.15, 0.35, 0.1]];
 
-/** Pale moon with a cyan halo for night grades, plus a few hard craters. */
+/** Night-grade moon: pale disc, cyan halo, a few hard craters. (v5: kept.) */
 export function drawMoon(ctx, cx, cy, r) {
   ctx.save();
   ctx.fillStyle = radialFill(ctx, cx, cy, r * 0.4, cx, cy, r * 2.4, MOON_HALO);
@@ -125,8 +101,8 @@ export function drawMoon(ctx, cx, cy, r) {
   ctx.restore();
 }
 
-// A four-point sparkle path centred on (px, py): four quadratic petals whose
-// tips cycle right, down, left, up around the centre control point.
+// Four-point sparkle: four quadratic petals whose tips cycle right, down,
+// left, up around the centre control point.
 function sparkle(c, px, py, r) {
   const reach = r * 2;
   c.moveTo(px, py - reach);
@@ -136,18 +112,15 @@ function sparkle(c, px, py, r) {
   }
 }
 
-/** Tiny four-point stars scattered across a night sky region. */
+/** Tiny four-point stars sprinkled over a night sky region. */
 export function drawStars(ctx, x, y, w, h, n, seed) {
   const rnd = rng(seed);
-  const stars = [];
-  for (let i = 0; i < n; i += 1) {
-    stars.push({
-      px: x + rnd() * w,
-      py: y + rnd() * h,
-      r: Math.min(w, h) * (0.006 + rnd() * 0.008),
-      a: 0.5 + rnd() * 0.5,
-    });
-  }
+  const stars = Array.from({ length: n }, () => ({
+    px: x + rnd() * w,
+    py: y + rnd() * h,
+    r: Math.min(w, h) * (0.006 + rnd() * 0.008),
+    a: 0.5 + rnd() * 0.5,
+  }));
   ctx.save();
   ctx.fillStyle = '#FFFFFF';
   for (const s of stars) {
@@ -159,8 +132,8 @@ export function drawStars(ctx, x, y, w, h, n, seed) {
 
 /* ------------------------------------------------------------------ palm */
 
-// The tapered curved trunk outline. Control points are precomputed so the two
-// bezier sweeps keep exactly the v3 geometry (note the +w0 on the return sweep).
+// Tapered curved trunk. The two bezier sweeps keep the exact v3/v4 geometry —
+// note the +w0 on the return sweep's second control point.
 function palmTrunk(c, baseX, baseY, topX, topY, height, lean, w0, w1) {
   const bend = lean * height * 0.35;
   const midY = baseY - height * 0.55;
@@ -172,7 +145,7 @@ function palmTrunk(c, baseX, baseY, topX, topY, height, lean, w0, w1) {
   c.bezierCurveTo(topX + w1 - neckX, neckY, baseX + w0 + bend, midY, baseX + w0, baseY);
 }
 
-// One drooping frond from the crown to its tip.
+// One drooping frond, crown to tip and back.
 function palmFrond(c, topX, topY, ang, len) {
   const dx = Math.cos(ang), dy = Math.sin(ang);
   const tipX = topX + dx * len;
@@ -187,7 +160,7 @@ function palmFrond(c, topX, topY, ang, len) {
   c.quadraticCurveTo(midX, c2y, topX, topY);
 }
 
-/** Black palm silhouette: tapered curved trunk, nine drooping fronds, nuts. */
+/** Black palm silhouette: curved tapered trunk, nine fronds, two nuts. */
 export function drawPalm(ctx, baseX, baseY, height, lean, color = INK) {
   const topX = baseX + lean * height;
   const topY = baseY - height;
@@ -206,7 +179,7 @@ export function drawPalm(ctx, baseX, baseY, height, lean, color = INK) {
   for (const f of frondSpecs) {
     trace(ctx, (c) => palmFrond(c, topX, topY, f.ang, f.len));
   }
-  // Two nuts in ONE path + one fill (single-path shape kept for identical AA).
+  // Both nuts in ONE path + one fill (single-path shape kept for identical AA).
   const nutAx = topX - height * 0.03, nutAy = topY + height * 0.04;
   const nutBx = topX + height * 0.032, nutBy = topY + height * 0.052;
   ctx.beginPath();
@@ -218,13 +191,14 @@ export function drawPalm(ctx, baseX, baseY, height, lean, color = INK) {
 
 /* ----------------------------------------------------------------- birds */
 
-/** A scatter of little "m" birds for the sky panels. */
+/** A scatter of little "m" birds for the day sky. */
 export function drawBirds(ctx, x, y, w, h, n, seed) {
   const rnd = rng(seed);
-  const flock = [];
-  for (let i = 0; i < n; i += 1) {
-    flock.push({ px: x + rnd() * w, py: y + rnd() * h, s: w * (0.02 + rnd() * 0.022) });
-  }
+  const flock = Array.from({ length: n }, () => ({
+    px: x + rnd() * w,
+    py: y + rnd() * h,
+    s: w * (0.02 + rnd() * 0.022),
+  }));
   ctx.save();
   ctx.lineCap = 'round';
   ctx.globalAlpha = 0.85;
@@ -242,7 +216,7 @@ export function drawBirds(ctx, x, y, w, h, n, seed) {
   ctx.restore();
 }
 
-/** A tiny prop plane silhouette crossing the sky (a small story detail). */
+/** Tiny prop plane crossing the sky — a small story detail. */
 export function drawPlane(ctx, cx, cy, s, tilt = -0.08) {
   ctx.save();
   ctx.translate(cx, cy);
@@ -281,8 +255,8 @@ function towerRoof(c, bx, topY, bw, h, neon) {
   c.restore();
 }
 
-// Lit windows on a loose grid inside a tower. The grid is laid out first (no
-// randomness), then each cell draws the same two rnd() calls as v3.
+// Lit windows on a loose grid. The grid is laid out first (no randomness),
+// then each cell consumes the same one-or-two rnd() calls as v3/v4.
 function towerWindows(c, rnd, bx, topY, bw, baseY, h, neon) {
   const step = Math.max(4, h * 0.035);
   const rows = [];
@@ -313,7 +287,7 @@ function towerMast(c, rnd, bx, topY, bw, h) {
   fillDisc(c, mastX, mastY, Math.max(1.5, h * 0.012));
 }
 
-// One tower's random dimensions, consuming rnd in the v3 order.
+// One tower's random dimensions, consuming rnd in the established order.
 function nextTower(rnd, w, h) {
   const bw = w * (0.06 + rnd() * 0.07);
   const rawH = h * (0.25 + rnd() * 0.55);
@@ -322,7 +296,7 @@ function nextTower(rnd, w, h) {
   return { bw, bh, neon };
 }
 
-/** Neon towers rising from the bottom of a region: rooflines, windows, masts. */
+/** Neon towers rising from a region's bottom edge: roofs, windows, masts. */
 export function drawSkyline(ctx, x, y, w, h, seed) {
   const rnd = rng(seed);
   const baseY = y + h;
@@ -343,9 +317,8 @@ export function drawSkyline(ctx, x, y, w, h, seed) {
 
 /* ------------------------------------------------------------------- car */
 
-// The body silhouette, replayed into a Path2D through fraction mappers so the
-// outline is identical to the hand-written path. Wheel arches are anticlockwise
-// arcs, exactly as before.
+// Body silhouette replayed into a Path2D through fraction mappers; wheel
+// arches are anticlockwise arcs, exactly as the hand-written path was.
 function carBodyPath(W, H) {
   const px = (fx) => fx * W;
   const py = (fy) => fy * H;
@@ -371,15 +344,12 @@ function carBodyPath(W, H) {
 // Tire smoke drifting off the rear.
 function carSmoke(c, W, H) {
   const rnd = rng(4242);
-  const puffs = [];
-  for (let i = 0; i < 5; i += 1) {
-    puffs.push({
-      px: -W * (0.02 + i * 0.045),
-      py: H * (0.62 - i * 0.05) + rnd() * H * 0.06,
-      pr: W * (0.045 + i * 0.02),
-      fill: i % 2 ? 'rgba(255,110,199,0.16)' : 'rgba(210,200,220,0.18)',
-    });
-  }
+  const puffs = Array.from({ length: 5 }, (_, i) => ({
+    px: -W * (0.02 + i * 0.045),
+    py: H * (0.62 - i * 0.05) + rnd() * H * 0.06,
+    pr: W * (0.045 + i * 0.02),
+    fill: i % 2 ? 'rgba(255,110,199,0.16)' : 'rgba(210,200,220,0.18)',
+  }));
   for (const p of puffs) {
     c.fillStyle = p.fill;
     fillDisc(c, p.px, p.py, p.pr);
@@ -467,8 +437,8 @@ function carFront(c, W, H) {
   c.fillText('VICE', px(0.07), py(0.545));
 }
 
-/** Low sport car facing right, tilted, with underglow, tire smoke, speed
- *  lines, neon rims and a tiny yellow plate. Box: W wide, W*0.3 tall. */
+/** Low sport car facing right: underglow, tire smoke, speed lines, neon rims,
+ *  tiny yellow plate. Box: W wide, W*0.3 tall. */
 export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
   const H = W * 0.3;
   ctx.save();
@@ -571,17 +541,16 @@ export function drawHelicopter(ctx, cx, cy, s) {
 /** Bills fluttering through a region. */
 export function drawMoney(ctx, x, y, w, h, n, seed) {
   const rnd = rng(seed);
-  const bills = [];
-  for (let i = 0; i < n; i += 1) {
+  const bills = Array.from({ length: n }, () => {
     const bw = w * (0.08 + rnd() * 0.05);
     const bh = bw * 0.48;
-    bills.push({
+    return {
       bw, bh,
       px: x + rnd() * (w - bw),
       py: y + rnd() * (h - bh),
       rot: (rnd() - 0.5) * 1.1,
-    });
-  }
+    };
+  });
   ctx.save();
   for (const b of bills) {
     ctx.save();
@@ -608,7 +577,7 @@ function billMark(ctx, bh) {
   ctx.fillText('$', 0, bh * 0.03);
 }
 
-/** A duffel bag stuffed with cash — the heist prop from the reference art. */
+/** A duffel bag stuffed with cash — the heist prop. */
 export function drawDuffel(ctx, cx, cy, s) {
   ctx.save();
   ctx.translate(cx, cy);
@@ -711,7 +680,7 @@ function neonSign(ctx, sx, sy, sw, sh, text, neon, m) {
   ctx.restore();
 }
 
-/** Neon shop signs, hanging wires, a crowd of silhouettes and wet-road glow. */
+/** Neon shop signs, sagging wires, a crowd of silhouettes, wet-road glow. */
 export function drawStreetScene(ctx, x, y, w, h, seed) {
   const rnd = rng(seed);
   const m = Math.min(w, h);
@@ -751,13 +720,10 @@ export function drawStreetScene(ctx, x, y, w, h, seed) {
   ctx.restore();
   // Crowd of silhouettes along the bottom.
   const n = 5 + Math.floor(rnd() * 4);
-  const crowd = [];
-  for (let i = 0; i < n; i += 1) {
-    crowd.push({
-      px: x + w * ((i + 0.5) / n) + (rnd() - 0.5) * w * 0.04,
-      ph: m * (0.1 + rnd() * 0.07),
-    });
-  }
+  const crowd = Array.from({ length: n }, (_, i) => ({
+    px: x + w * ((i + 0.5) / n) + (rnd() - 0.5) * w * 0.04,
+    ph: m * (0.1 + rnd() * 0.07),
+  }));
   ctx.fillStyle = INK;
   const baseY = y + h;
   for (const person of crowd) {
@@ -784,7 +750,7 @@ export function drawStreetScene(ctx, x, y, w, h, seed) {
 
 /* ------------------------------------------------------------ beach scene */
 
-// The jetski + rider and its wake. `h` is the panel height (sets the wake width).
+// The jetski + rider and its wake. `h` is the panel height (sets wake width).
 function jetski(ctx, jx, jy, js, h) {
   ctx.fillStyle = INK;
   trace(ctx, (c) => {
@@ -812,7 +778,7 @@ function jetski(ctx, jx, jy, js, h) {
 const SEA_DAY = [[0, 'rgba(0,212,255,0.28)'], [1, 'rgba(43,10,74,0.34)']];
 const SEA_NIGHT = [[0, 'rgba(6,18,40,0.55)'], [1, 'rgba(8,4,26,0.6)']];
 
-/** Sea horizon with waves, a jetski and its wake, a distant sail, palm edge. */
+/** Sea horizon with waves, a jetski and wake, a distant sail, palm edge. */
 export function drawBeachScene(ctx, x, y, w, h, seed, night = false) {
   const rnd = rng(seed);
   const hy = y + h * 0.62; // horizon low, so the sea sits below the face zone
@@ -822,7 +788,7 @@ export function drawBeachScene(ctx, x, y, w, h, seed, night = false) {
   for (const [at, color] of night ? SEA_NIGHT : SEA_DAY) sea.addColorStop(at, color);
   ctx.fillStyle = sea;
   fillBox(ctx, x, hy, w, h * 0.33);
-  // Sun (or moon) reflection column on the water.
+  // Light column on the water (warm by day, cyan by night).
   const refl = ctx.createLinearGradient(x, hy, x, seaBottom);
   refl.addColorStop(0, night ? 'rgba(0,229,255,0.3)' : 'rgba(255,214,10,0.35)');
   refl.addColorStop(1, night ? 'rgba(0,229,255,0)' : 'rgba(255,214,10,0)');
@@ -865,8 +831,8 @@ export function drawBeachScene(ctx, x, y, w, h, seed, night = false) {
 
 /* --------------------------------------------------------------- vignette */
 
-// Small filler panels: props sit in the lower half so they never cross the face
-// in the upper third. Variant 0 helicopter, 1 money, 2 police bar, 3 duffel.
+// Small filler panels: props sit in the lower half so they never cross the
+// face in the upper third. Variant 0 helicopter, 1 money, 2 police bar, 3 duffel.
 const VIGNETTES = [
   (ctx, x, y, w, h, m, seed) => {
     drawHelicopter(ctx, x + w * 0.5, y + h * 0.78, m * 0.58);
@@ -983,9 +949,9 @@ export function drawGrain(ctx, w, h) {
 
 /* --------------------------------------------------------- panel borders */
 
-/** Crisp, straight, uniform comic borders (no jitter), a neon edge glow on the
- *  hero and one story panel, and a heavier outer frame. Panels tile exactly, so
- *  shared edges read as one clean ink line. */
+/** Crisp straight comic borders (no jitter), a neon edge glow on the hero and
+ *  one story panel, and a heavier outer frame. Panels tile exactly, so shared
+ *  edges read as one clean ink line. */
 export function drawPanelBorders(ctx, panels, w, h) {
   const lw = Math.max(4, Math.min(7, Math.min(w, h) * 0.006));
   ctx.save();
@@ -1027,7 +993,8 @@ function starPath(ctx, cx, cy, r, points = 5) {
   ctx.closePath();
 }
 
-/** Rotated VICE CITY badge, top-left. */
+/** Rotated VICE CITY badge, top-left. Its small pink star is part of the logo
+ *  and is NOT one of the five wanted stars below it. */
 export function stickerViceCity(ctx, w, h) {
   const s = Math.min(w, h);
   const bw = s * 0.26;
@@ -1053,7 +1020,7 @@ export function stickerViceCity(ctx, w, h) {
   ctx.restore();
 }
 
-/** Round LEONIDA badge, top-right. */
+/** Round LEONIDA badge, top-right (its yellow star is part of the logo). */
 export function stickerLeonida(ctx, w, h) {
   const s = Math.min(w, h);
   const r = s * 0.075;
@@ -1079,31 +1046,32 @@ export function stickerLeonida(ctx, w, h) {
   ctx.restore();
 }
 
-/** Three outlined gold stars below the top-left badge. */
+/** v5: the full five-star wanted level — a neat, evenly spaced horizontal row
+ *  of outlined gold stars below the VICE CITY badge.
+ *
+ *  Placement is computed, not scattered:
+ *   * the row starts at 0.05w and steps by max(0.0375w, 0.039s), so on wide
+ *     sheets it spans ~0.05w..0.20w and on square/portrait sheets the spacing
+ *     stays ahead of the star diameter;
+ *   * radius = min(0.019s, 0.0167w) keeps neighbours (fill + ink outline) from
+ *     touching at every post size;
+ *   * the steady baseline at 0.165h sits below the rotated badge's lowest
+ *     corner (~0.05h + 0.089s) with clearance, and above the face zone: faces
+ *     anchor at panel centre-x, so the left-hand row never crosses a head in
+ *     the shipped concepts. No rotation — the row reads as a wanted level. */
 export function stickerStars(ctx, w, h) {
   const s = Math.min(w, h);
-  const rnd = rng(777);
-  const stars = [];
-  for (let i = 0; i < 3; i += 1) {
-    stars.push({
-      r: s * (0.022 + rnd() * 0.02),
-      cx: w * (0.05 + rnd() * 0.07),
-      cy: h * (0.12 + rnd() * 0.05),
-      rot: (rnd() - 0.5) * 0.6,
-    });
-  }
+  const r = Math.min(s * 0.019, w * 0.0167);
+  const step = Math.max(w * 0.0375, s * 0.039);
+  const cy = h * 0.165;
   ctx.save();
-  for (const st of stars) {
-    ctx.save();
-    ctx.translate(st.cx, st.cy);
-    ctx.rotate(st.rot);
-    starPath(ctx, 0, 0, st.r);
-    ctx.fillStyle = '#FFD60A';
+  ctx.fillStyle = '#FFD60A';
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = Math.max(1.5, s * 0.0035);
+  for (let i = 0; i < 5; i += 1) {
+    starPath(ctx, w * 0.05 + i * step, cy, r);
     ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = Math.max(1.5, s * 0.0035);
     ctx.stroke();
-    ctx.restore();
   }
   ctx.restore();
 }

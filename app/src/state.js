@@ -1,7 +1,7 @@
-// state.js — shared cover state plus the four one-click concepts (v4).
+// state.js — the shared cover state and the four one-click concepts (v5).
 //
 // A concept is the two-click path from photo to finished cover: load the sample
-// photos (only when the user has none of their own), then set layout, grade,
+// roll (only when the user has none of their own), then set layout, grade,
 // caption, stickers and per-panel crops in one shot.
 //
 // Crop philosophy: hero/story panels use the framing engine's head anchor so a
@@ -9,11 +9,11 @@
 // putting the face fully OUT of frame rather than half-cut. Every panel shows
 // either a complete face or pure scenery.
 //
-// v4 change: Sunset Beach Heist loses its car panel. The sunset-hero tiling now
-// has five slots (hero, skyline, vignette, beach, street), so the concept's crop
-// list drops the old car crop and remaps beach -> slot 3, street -> slot 4. The
-// beach photo (summer) extends left into the freed space. All other concepts,
-// grades and samples are exactly as in v3.
+// v5 changes no state data: the two art fixes (five wanted stars, no sunset
+// sun) live entirely in decor.js / cover.js. The v4 geometry holds — Sunset
+// Beach Heist tiles five slots (hero, skyline, vignette, beach, street) with no
+// car panel, and the crop cache still regenerates stale lists whose length no
+// longer matches the tiling.
 
 import { defaultEdits, layoutById } from './layouts.js';
 import { clamp } from './framing.js';
@@ -28,10 +28,7 @@ const SIZE_TABLE = [
 export const SIZES = SIZE_TABLE.map(([id, name, w, h]) => ({ id, name, w, h }));
 
 export function sizeById(id) {
-  for (const size of SIZES) {
-    if (size.id === id) return size;
-  }
-  return SIZES[0];
+  return SIZES.find((size) => size.id === id) ?? SIZES[0];
 }
 
 // The four bundled sample photos (free to use; porsche + summer are the boss's
@@ -53,11 +50,8 @@ function sceneCrop(photo, zoom, aimX, aimY) {
 // Crops are declared as tagged rows: ['face', photo, zoom, panX?, panY?] or
 // ['scene', photo, zoom, aimX, aimY]. Row order is slot order.
 function cropList(rows) {
-  return rows.map((row) => {
-    const [kind, photo, zoom, a, b] = row;
-    if (kind === 'scene') return sceneCrop(photo, zoom, a, b);
-    return faceCrop(photo, zoom, a, b);
-  });
+  return rows.map(([kind, photo, zoom, a, b]) =>
+    kind === 'scene' ? sceneCrop(photo, zoom, a, b) : faceCrop(photo, zoom, a, b));
 }
 
 // Shared concept defaults; each concept below states only what makes it distinct.
@@ -84,9 +78,10 @@ export const PRESETS = [
     title: 'SUNSET HEIST',
     subtitle: 'A VICE CITY STORY',
     photos: ['boulevard', 'pier', 'summer', 'porsche'],
-    // v4 sunset-hero slots: hero, skyline, vignette (faces) + beach, street.
+    // sunset-hero slots: hero, skyline, vignette (faces) + beach, street.
     // summer owns the hero; porsche's small head takes a tight vignette zoom.
-    // The old car crop is gone; beach (summer) now fills the wider left slot.
+    // No car crop (v4); beach (summer) fills the wider left slot. v5: the sky
+    // above the hero no longer carries a sun, and the badge gets five stars.
     crops: cropList([
       ['face', 2, 1.6, -0.3, 0],
       ['face', 1, 1.28, -0.25, 0],
@@ -110,6 +105,7 @@ export const PRESETS = [
     // cinema slots: hero, skyline, vignette (faces) + car/beach/street. The cold
     // grade + hero/skyline are v2's; porsche rides the top-right vignette (row 1,
     // safe from the bottom title) at a zoom that keeps its face readable.
+    // v5: the night moon stays; the wanted row below the badge is now five.
     crops: cropList([
       ['face', 0, 1.08],
       ['face', 1, 1.28, -0.25, 0],
@@ -133,6 +129,7 @@ export const PRESETS = [
     // five-vert columns: beach, car, hero, street, skyline. summer takes the beach
     // + hero columns, porsche the street column (tight), boulevard the car, pier
     // the skyline. Every face sits in the upper third, clear of the title.
+    // stars:false here — no yellow cluster on this cover (unchanged in v5).
     crops: cropList([
       ['face', 0, 1],
       ['face', 2, 1.2],
@@ -155,6 +152,8 @@ export const PRESETS = [
     photos: ['boulevard', 'pier', 'summer', 'porsche'],
     // quad slots: hero, skyline, street, car, vignette, beach. porsche takes the
     // tall vignette (props live in the lower half); summer's pool is the beach beat.
+    // v5 side effect (accepted): stars:true means this cover also gets the
+    // five-star row, and its day sky loses the sun like every other non-night grade.
     crops: cropList([
       ['face', 0, 1.05],
       ['face', 1, 1.24, -0.3, 0],
@@ -167,10 +166,7 @@ export const PRESETS = [
 ];
 
 export function presetById(id) {
-  for (const preset of PRESETS) {
-    if (preset.id === id) return preset;
-  }
-  return PRESETS[0];
+  return PRESETS.find((preset) => preset.id === id) ?? PRESETS[0];
 }
 
 /** A blank cover, pre-set to the default concept's look. */
@@ -191,9 +187,10 @@ export function createState() {
 
 /**
  * The crop list for the layout currently on screen (lazily created).
- * v4 cache guard: a stored list whose length no longer matches the tiling (e.g.
- * a stale six-entry sunset-hero list from before the car panel was removed) is
- * regenerated from the live panels, so a panel never reads the wrong crop.
+ * Cache guard (v4): a stored list whose length no longer matches the tiling
+ * (e.g. a stale six-entry sunset-hero list from before the car panel was
+ * removed) is regenerated from the live panels, so a panel never reads the
+ * wrong crop.
  */
 export function activeEdits(state) {
   const layout = layoutById(state.layout);

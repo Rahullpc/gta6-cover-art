@@ -1,4 +1,4 @@
-// editor.js — wires every control to the shared state (v4). Manages the photo
+// editor.js — wires every control to the shared state (v5). Manages the photo
 // roll (upload, drag-drop, the four samples), per-panel crop/zoom/drag, and the
 // live preview. The preview is the export render scaled to fit the stage, so it
 // is always identical to the PNG the export buttons write.
@@ -8,9 +8,9 @@
 // compact with a visible, draggable scrollbar so every section is reachable at
 // 720px, and selecting a panel scrolls its crop controls into view.
 //
-// v4 keeps the wiring identical and routes every listener through small `on` /
-// `button` helpers, with the picker rows built from descriptor loops. Sunset
-// Hero now exposes five panels instead of six; everything else is unchanged.
+// v5 keeps the wiring identical to v4 (the two art fixes are renderer-side):
+// every listener routes through the small `on` / `button` helpers, picker rows
+// are built from descriptor loops, and Sunset Hero exposes five panels.
 
 import { LAYOUTS, layoutById } from './layouts.js';
 import { GRADES, gradeById } from './grades.js';
