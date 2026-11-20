@@ -1,9 +1,9 @@
-// shots.js — reproducible screenshot scenes.
-// ?shot=cover renders the EXPORTED cover full-bleed (the exact export render
-// path, blitted to the viewport); ?shot=editor shows the full editor with photos
-// loaded. Extra params: photo=<sample>, caption=<title>, sub=<text>,
-// preset=<concept id>, size=<post size>. window.__shotReady flips true once
-// fonts, photos and paint are done, so a screenshot script can wait on it.
+// shots.js — reproducible screenshot scenes (v3).
+// ?shot=cover renders the EXPORTED cover full-bleed (the exact export render path,
+// blitted to the viewport); ?shot=editor shows the full editor with photos loaded.
+// Extra params: photo=<sample>, caption=<title>, sub=<text>, preset=<concept id>,
+// size=<post size>. window.__shotReady flips true once fonts, photos and paint are
+// done, so a screenshot script can wait on it.
 
 import { applyPreset, presetById, SIZES } from './state.js';
 
@@ -37,11 +37,10 @@ function blitCover(out) {
   ctx.drawImage(out, (cssW - dw) / 2, (cssH - dh) / 2, dw, dh);
 }
 
-export async function runShot(params, api) {
-  const { state, editor, renderToCanvas } = api;
-  const shot = params.get('shot');
+// Apply the concept + any URL overrides shared by both scenes.
+async function prepareScene(params, api) {
+  const { state, editor } = api;
   const preset = presetById(params.get('preset') ?? 'sunset-heist');
-
   await editor.resetPhotos(preset.photos);
   const extra = params.get('photo');
   if (extra && !preset.photos.includes(extra)) await editor.loadSamples([extra]);
@@ -50,8 +49,14 @@ export async function runShot(params, api) {
   if (sizeParam && SIZES.some((s) => s.id === sizeParam)) state.size = sizeParam;
   if (params.get('caption')) state.title = params.get('caption');
   if (params.get('sub')) state.subtitle = params.get('sub');
+  return preset;
+}
 
-  if (shot === 'cover') {
+export async function runShot(params, api) {
+  const { state, editor, renderToCanvas } = api;
+  await prepareScene(params, api);
+
+  if (params.get('shot') === 'cover') {
     document.body.classList.add('shot-cover');
     editor.syncControls();
     // The exact export render, drawn to fill the viewport.

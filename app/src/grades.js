@@ -1,39 +1,63 @@
-// grades.js — six loud colour grades, v2 edition.
+// grades.js — six loud colour grades (v3, look unchanged from v2).
 //
-// Each grade is two things: a canvas filter string applied while the photo is
-// drawn, and a stack of gradient washes composited over the panel afterwards.
-// `k` (0..1) is the intensity slider. Every grade stays saturated and bold at
-// the default setting — pale is not on the menu.
+// A grade is two things: a canvas filter string applied while the photo draws,
+// and an ordered stack of composite washes laid over the panel afterwards. `k`
+// (0..1) is the intensity slider; every grade stays saturated and bold at the
+// default — pale is not on the menu.
 //
-// The v2 fix lives in Neon Night: v1 screened magenta over the photo and warm
-// skin tones survived underneath. v2 recolours the ENTIRE panel with a 'color'
-// blend (the wash's hue + saturation over the photo's own luminance), so no
-// warm skin can survive; magenta and cyan appear only as corner glows. Teal
-// Noir gets the same cool-dominant treatment.
+// v3 keeps v2's Neon Night fix: the whole panel is recoloured with a 'color'
+// blend (wash hue + saturation over the photo's own luminance) so no warm skin
+// survives; magenta/cyan appear only as corner glows. Teal Noir is cool-dominant
+// the same way.
+//
+// Rather than six hand-written paint functions, each grade is declared as data
+// (filter coefficients + a list of wash steps) and one interpreter runs the
+// steps in order. The canvas calls — and therefore the pixels — are identical.
 
 // rgba() with the intensity baked into the alpha channel.
 const tint = (r, g, b, a, k) => `rgba(${r},${g},${b},${(a * k).toFixed(3)})`;
 
-function verticalWash(ctx, x, y, w, h, stops) {
-  const grad = ctx.createLinearGradient(x, y, x, y + h);
-  for (const [at, color] of stops) grad.addColorStop(at, color);
+// Compose the photo filter string from coefficients. `bri` may be negative
+// (night grades darken); `sep` adds a sepia term instead of brightness.
+function filterFrom({ sat, con, bri, sep }, k) {
+  const parts = [`saturate(${1 + sat * k})`, `contrast(${1 + con * k})`];
+  if (bri !== undefined) parts.push(`brightness(${1 + bri * k})`);
+  if (sep !== undefined) parts.push(`sepia(${sep * k})`);
+  return parts.join(' ');
+}
+
+// A wash step's fill style. `rect` is [fx, fy, fw, fh] in panel fractions; a
+// stop colour is either a literal string or an [r,g,b,a] array tinted by k.
+function stepFill(ctx, x, y, w, h, step, k) {
+  const stopColor = (c) => (Array.isArray(c) ? tint(c[0], c[1], c[2], c[3], k) : c);
+  if (step.solid) return stopColor(step.solid);
+  if (step.glow) {
+    const g = step.glow;
+    const cx = x + g.cx * w;
+    const cy = y + g.cy * h;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, g.r * Math.max(w, h));
+    grad.addColorStop(0, tint(g.rgb[0], g.rgb[1], g.rgb[2], g.a, k));
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    return grad;
+  }
+  const [fx, fy, fw, fh] = step.rect ?? [0, 0, 1, 1];
+  const x0 = x + fx * w;
+  const y0 = y + fy * h;
+  const grad =
+    step.grad === 'd'
+      ? ctx.createLinearGradient(x0, y0, x0 + fw * w, y0 + fh * h)
+      : ctx.createLinearGradient(x0, y0, x0, y0 + fh * h);
+  for (const [at, color] of step.stops) grad.addColorStop(at, stopColor(color));
   return grad;
 }
 
-function diagonalWash(ctx, x, y, w, h, stops) {
-  const grad = ctx.createLinearGradient(x, y, x + w, y + h);
-  for (const [at, color] of stops) grad.addColorStop(at, color);
-  return grad;
-}
-
-// A radial neon glow pinned to a corner, fading to nothing toward the centre
-// so the face area keeps its grade without picking up a warm cast.
-function cornerGlow(ctx, x, y, w, h, cx, cy, radius, rgb, alpha, k) {
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-  grad.addColorStop(0, tint(...rgb, alpha, k));
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(x, y, w, h);
+// Run a grade's wash stack inside the current clip, in declared order.
+function runSteps(ctx, x, y, w, h, steps, k) {
+  for (const step of steps) {
+    ctx.globalCompositeOperation = step.op;
+    ctx.fillStyle = stepFill(ctx, x, y, w, h, step, k);
+    ctx.fillRect(x, y, w, h);
+  }
 }
 
 export const GRADES = [
@@ -41,144 +65,82 @@ export const GRADES = [
     id: 'sunset',
     name: 'Sunset',
     swatch: ['#FF2E88', '#FF7A18'],
-    filter: (k) => `saturate(${1 + 0.85 * k}) contrast(${1 + 0.18 * k}) brightness(${1 + 0.05 * k})`,
-    paint(ctx, x, y, w, h, k) {
-      // The Vice City sky: purple crown, magenta heart, orange floor.
-      ctx.globalCompositeOperation = 'overlay';
-      ctx.fillStyle = verticalWash(ctx, x, y, w, h, [
-        [0, tint(43, 10, 74, 0.6, k)],
-        [0.45, tint(255, 46, 136, 0.42, k)],
-        [1, tint(255, 122, 24, 0.66, k)],
-      ]);
-      ctx.fillRect(x, y, w, h);
-      ctx.globalCompositeOperation = 'screen';
-      ctx.fillStyle = verticalWash(ctx, x, y + h * 0.55, w, h * 0.45, [
-        [0, 'rgba(255,122,24,0)'],
-        [1, tint(255, 158, 0, 0.34, k)],
-      ]);
-      ctx.fillRect(x, y, w, h);
-    },
+    coeff: { sat: 0.85, con: 0.18, bri: 0.05 },
+    // The Vice City sky: purple crown, magenta heart, orange floor.
+    steps: [
+      { op: 'overlay', grad: 'v', stops: [[0, [43, 10, 74, 0.6]], [0.45, [255, 46, 136, 0.42]], [1, [255, 122, 24, 0.66]]] },
+      { op: 'screen', grad: 'v', rect: [0, 0.55, 1, 0.45], stops: [[0, 'rgba(255,122,24,0)'], [1, [255, 158, 0, 0.34]]] },
+    ],
   },
   {
     id: 'neon-night',
     name: 'Neon Night',
     swatch: ['#0A1030', '#00E5FF'],
-    filter: (k) => `saturate(${1 + 0.5 * k}) contrast(${1 + 0.42 * k}) brightness(${1 - 0.46 * k})`,
-    paint(ctx, x, y, w, h, k) {
-      // Step 1 — sink the panel into night with a cold multiply.
-      ctx.globalCompositeOperation = 'multiply';
-      ctx.fillStyle = verticalWash(ctx, x, y, w, h, [
-        [0, tint(16, 20, 64, 0.82, k)],
-        [0.6, tint(20, 24, 70, 0.66, k)],
-        [1, tint(6, 8, 28, 0.86, k)],
-      ]);
-      ctx.fillRect(x, y, w, h);
-      // Step 2 — recolour EVERYTHING cold. 'color' keeps the photo's luminance
-      // but takes the wash's hue + saturation, turning warm skin to cold steel.
-      ctx.globalCompositeOperation = 'color';
-      ctx.fillStyle = tint(20, 120, 210, 0.92, k);
-      ctx.fillRect(x, y, w, h);
-      // Step 3 — push saturation a little further so the neon reads. Still cool.
-      ctx.globalCompositeOperation = 'saturation';
-      ctx.fillStyle = tint(0, 180, 255, 0.4, k);
-      ctx.fillRect(x, y, w, h);
-      // Step 4 — magenta / cyan exist only as corner glows, never a warm wash.
-      ctx.globalCompositeOperation = 'screen';
-      const radius = Math.max(w, h) * 0.7;
-      cornerGlow(ctx, x, y, w, h, x, y, radius, [255, 46, 136], 0.3, k);
-      cornerGlow(ctx, x, y, w, h, x + w, y + h, radius, [0, 229, 255], 0.32, k);
-    },
+    coeff: { sat: 0.5, con: 0.42, bri: -0.46 },
+    steps: [
+      // 1 — sink the panel into night with a cold multiply.
+      { op: 'multiply', grad: 'v', stops: [[0, [16, 20, 64, 0.82]], [0.6, [20, 24, 70, 0.66]], [1, [6, 8, 28, 0.86]]] },
+      // 2 — recolour EVERYTHING cold: 'color' keeps luminance, takes wash hue +
+      // saturation, turning warm skin to cold steel.
+      { op: 'color', solid: [20, 120, 210, 0.92] },
+      // 3 — push saturation a little further so the neon reads. Still cool.
+      { op: 'saturation', solid: [0, 180, 255, 0.4] },
+      // 4 — magenta / cyan exist only as corner glows, never a warm wash.
+      { op: 'screen', glow: { cx: 0, cy: 0, r: 0.7, rgb: [255, 46, 136], a: 0.3 } },
+      { op: 'screen', glow: { cx: 1, cy: 1, r: 0.7, rgb: [0, 229, 255], a: 0.32 } },
+    ],
   },
   {
     id: 'golden-hour',
     name: 'Golden Hour',
     swatch: ['#FFD60A', '#FF7A18'],
-    filter: (k) => `saturate(${1 + 0.6 * k}) contrast(${1 + 0.14 * k}) sepia(${0.32 * k})`,
-    paint(ctx, x, y, w, h, k) {
-      ctx.globalCompositeOperation = 'overlay';
-      ctx.fillStyle = verticalWash(ctx, x, y, w, h, [
-        [0, tint(255, 214, 10, 0.46, k)],
-        [0.55, tint(255, 158, 0, 0.38, k)],
-        [1, tint(210, 84, 24, 0.52, k)],
-      ]);
-      ctx.fillRect(x, y, w, h);
-      ctx.globalCompositeOperation = 'soft-light';
-      ctx.fillStyle = tint(255, 196, 138, 0.55, k);
-      ctx.fillRect(x, y, w, h);
-    },
+    coeff: { sat: 0.6, con: 0.14, sep: 0.32 },
+    steps: [
+      { op: 'overlay', grad: 'v', stops: [[0, [255, 214, 10, 0.46]], [0.55, [255, 158, 0, 0.38]], [1, [210, 84, 24, 0.52]]] },
+      { op: 'soft-light', solid: [255, 196, 138, 0.55] },
+    ],
   },
   {
     id: 'vice-pink',
     name: 'Vice Pink',
     swatch: ['#FF2E88', '#FF6EC7'],
-    filter: (k) => `saturate(${1 + 0.9 * k}) contrast(${1 + 0.22 * k})`,
-    paint(ctx, x, y, w, h, k) {
-      ctx.globalCompositeOperation = 'overlay';
-      ctx.fillStyle = diagonalWash(ctx, x, y, w, h, [
-        [0, tint(255, 46, 136, 0.6, k)],
-        [0.55, tint(255, 110, 199, 0.44, k)],
-        [1, tint(123, 47, 190, 0.58, k)],
-      ]);
-      ctx.fillRect(x, y, w, h);
-      ctx.globalCompositeOperation = 'multiply';
-      ctx.fillStyle = tint(255, 46, 136, 0.22, k);
-      ctx.fillRect(x, y, w, h);
-      ctx.globalCompositeOperation = 'screen';
-      ctx.fillStyle = verticalWash(ctx, x, y, w, h * 0.4, [
-        [0, tint(255, 110, 199, 0.28, k)],
-        [1, 'rgba(0,0,0,0)'],
-      ]);
-      ctx.fillRect(x, y, w, h);
-    },
+    coeff: { sat: 0.9, con: 0.22 },
+    steps: [
+      { op: 'overlay', grad: 'd', stops: [[0, [255, 46, 136, 0.6]], [0.55, [255, 110, 199, 0.44]], [1, [123, 47, 190, 0.58]]] },
+      { op: 'multiply', solid: [255, 46, 136, 0.22] },
+      { op: 'screen', grad: 'v', rect: [0, 0, 1, 0.4], stops: [[0, [255, 110, 199, 0.28]], [1, 'rgba(0,0,0,0)']] },
+    ],
   },
   {
     id: 'teal-noir',
     name: 'Teal Noir',
     swatch: ['#0E3B43', '#00D4FF'],
-    filter: (k) => `saturate(${1 + 0.45 * k}) contrast(${1 + 0.52 * k}) brightness(${1 - 0.44 * k})`,
-    paint(ctx, x, y, w, h, k) {
-      ctx.globalCompositeOperation = 'multiply';
-      ctx.fillStyle = verticalWash(ctx, x, y, w, h, [
-        [0, tint(14, 59, 67, 0.82, k)],
-        [0.5, tint(18, 32, 50, 0.68, k)],
-        [1, tint(8, 26, 34, 0.86, k)],
-      ]);
-      ctx.fillRect(x, y, w, h);
+    coeff: { sat: 0.45, con: 0.52, bri: -0.44 },
+    steps: [
+      { op: 'multiply', grad: 'v', stops: [[0, [14, 59, 67, 0.82]], [0.5, [18, 32, 50, 0.68]], [1, [8, 26, 34, 0.86]]] },
       // Cool recolour so skin cannot go warm under the teal.
-      ctx.globalCompositeOperation = 'color';
-      ctx.fillStyle = tint(20, 110, 130, 0.6, k);
-      ctx.fillRect(x, y, w, h);
-      ctx.globalCompositeOperation = 'screen';
-      ctx.fillStyle = verticalWash(ctx, x, y + h * 0.6, w, h * 0.4, [
-        [0, 'rgba(0,0,0,0)'],
-        [1, tint(0, 212, 255, 0.24, k)],
-      ]);
-      ctx.fillRect(x, y, w, h);
-      cornerGlow(ctx, x, y, w, h, x + w, y, Math.max(w, h) * 0.5, [255, 158, 0], 0.1, k);
-    },
+      { op: 'color', solid: [20, 110, 130, 0.6] },
+      { op: 'screen', grad: 'v', rect: [0, 0.6, 1, 0.4], stops: [[0, 'rgba(0,0,0,0)'], [1, [0, 212, 255, 0.24]]] },
+      { op: 'screen', glow: { cx: 1, cy: 0, r: 0.5, rgb: [255, 158, 0], a: 0.1 } },
+    ],
   },
   {
     id: 'ultraviolet',
     name: 'Ultraviolet',
     swatch: ['#7B2FBE', '#00E5FF'],
-    filter: (k) => `saturate(${1 + 0.75 * k}) contrast(${1 + 0.26 * k}) brightness(${1 - 0.06 * k})`,
-    paint(ctx, x, y, w, h, k) {
-      ctx.globalCompositeOperation = 'overlay';
-      ctx.fillStyle = diagonalWash(ctx, x, y, w, h, [
-        [0, tint(123, 47, 190, 0.6, k)],
-        [0.6, tint(255, 46, 136, 0.38, k)],
-        [1, tint(43, 10, 74, 0.64, k)],
-      ]);
-      ctx.fillRect(x, y, w, h);
-      ctx.globalCompositeOperation = 'screen';
-      ctx.fillStyle = verticalWash(ctx, x, y + h * 0.65, w, h * 0.35, [
-        [0, 'rgba(0,0,0,0)'],
-        [1, tint(0, 229, 255, 0.26, k)],
-      ]);
-      ctx.fillRect(x, y, w, h);
-    },
+    coeff: { sat: 0.75, con: 0.26, bri: -0.06 },
+    steps: [
+      { op: 'overlay', grad: 'd', stops: [[0, [123, 47, 190, 0.6]], [0.6, [255, 46, 136, 0.38]], [1, [43, 10, 74, 0.64]]] },
+      { op: 'screen', grad: 'v', rect: [0, 0.65, 1, 0.35], stops: [[0, 'rgba(0,0,0,0)'], [1, [0, 229, 255, 0.26]]] },
+    ],
   },
 ];
+
+// Attach the live filter + paint functions derived from each grade's data.
+for (const grade of GRADES) {
+  grade.filter = (k) => filterFrom(grade.coeff, k);
+  grade.paint = (ctx, x, y, w, h, k) => runSteps(ctx, x, y, w, h, grade.steps, k);
+}
 
 export const gradeById = (id) => GRADES.find((g) => g.id === id) ?? GRADES[0];
 

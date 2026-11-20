@@ -1,19 +1,21 @@
-// decor.js — the poster's vector art, all Canvas 2D and fully deterministic.
+// decor.js — the poster's vector art, all Canvas 2D and fully deterministic (v3).
 //
-// A seeded PRNG drives every scatter (stars, birds, windows, money, crowds) so
-// the live preview and the exported PNG are pixel-identical. Each panel gets
-// action: striped synthwave sun, palms, neon skyline, a sport car with tire
-// smoke, a beach jetski, neon street signs with a crowd, helicopter / money /
-// police / duffel vignettes, a tiny plane in the sky, halftone dots, film
-// grain, crisp comic borders and sticker badges.
+// A seeded PRNG drives every scatter (stars, birds, windows, money, crowds) so the
+// live preview and the exported PNG are pixel-identical. Each panel gets action:
+// striped synthwave sun, palms, neon skyline, a sport car with tire smoke, a beach
+// jetski, neon street signs with a crowd, helicopter / money / police / duffel
+// vignettes, a tiny plane, halftone dots, film grain, crisp comic borders, badges.
 //
-// v2: borders are straight and uniform (neat, not jittered) and hero decor is
-// pinned to corners / the lower half so it never covers a face, which the
-// framing engine seats in the upper third.
+// Borders are straight and uniform (neat, not jittered); hero decor is pinned to
+// corners / the lower half so it never covers a face, which the framing engine
+// seats in the upper third.
 //
-// Implementation note: the primitives below (disc / ring / box / seg / trace)
-// are a tiny drawing vocabulary shared by every scene. They keep the geometry
-// identical while letting each scene read as a short composition of shapes.
+// v3 reorganises the art into a small drawing vocabulary plus per-scene helpers
+// and data tables (the car body is a path-command table, scatters are loops over
+// descriptors). The geometry, colours, seeds and composite order are unchanged,
+// so the pixels match v2 exactly. Two single-path multi-arc fills (the halftone
+// dot tile and the palm nuts) are kept verbatim — splitting them would shift the
+// anti-aliasing by a sub-pixel.
 
 const INK = '#0D001A';
 const DISPLAY = '"Vice Display", "Arial Black", sans-serif';
@@ -33,38 +35,46 @@ export function rng(seed) {
 
 /* ------------------------------------------------- drawing vocabulary */
 
-// Filled circle.
-function disc(c, x, y, r) {
+const disc = (c, x, y, r) => {
   c.beginPath();
   c.arc(x, y, r, 0, TAU);
   c.fill();
-}
-// Stroked circle (uses current strokeStyle / lineWidth).
-function ring(c, x, y, r) {
+};
+const ring = (c, x, y, r) => {
   c.beginPath();
   c.arc(x, y, r, 0, TAU);
   c.stroke();
-}
-// Filled rectangle.
-function box(c, x, y, w, h) {
-  c.fillRect(x, y, w, h);
-}
-// Single stroked segment.
-function seg(c, x1, y1, x2, y2) {
+};
+const box = (c, x, y, w, h) => c.fillRect(x, y, w, h);
+const seg = (c, x1, y1, x2, y2) => {
   c.beginPath();
   c.moveTo(x1, y1);
   c.lineTo(x2, y2);
   c.stroke();
-}
-// Build a path from a callback, then fill it.
-function trace(c, build) {
+};
+const trace = (c, build) => {
   c.beginPath();
   build(c);
   c.closePath();
   c.fill();
+};
+
+// A radial gradient fill helper used by the glows below.
+function radial(c, x0, y0, r0, x1, y1, r1, stops) {
+  const g = c.createRadialGradient(x0, y0, r0, x1, y1, r1);
+  for (const [at, color] of stops) g.addColorStop(at, color);
+  return g;
 }
 
 /* ------------------------------------------------------------------- sun */
+
+// Cut the retro horizontal slits out of the lower half of the sun disc.
+function cutSunSlits(c, mid, r, size) {
+  c.globalCompositeOperation = 'destination-out';
+  for (let i = 0; i < 7; i++) {
+    box(c, 0, mid + r * (0.04 + i * 0.14), size, r * (0.03 + i * 0.022));
+  }
+}
 
 /** Big striped synthwave sun with a warm glow, cut on an offscreen canvas. */
 export function drawSun(ctx, cx, cy, r, alpha = 0.92) {
@@ -75,18 +85,13 @@ export function drawSun(ctx, cx, cy, r, alpha = 0.92) {
   off.height = size;
   const c = off.getContext('2d');
   const mid = size / 2;
-  const glow = c.createRadialGradient(mid, mid - r * 0.2, r * 0.1, mid, mid, r);
-  glow.addColorStop(0, '#FFD60A');
-  glow.addColorStop(0.55, '#FF9E00');
-  glow.addColorStop(1, '#FF2E88');
-  c.fillStyle = glow;
+  c.fillStyle = radial(c, mid, mid - r * 0.2, r * 0.1, mid, mid, r, [
+    [0, '#FFD60A'],
+    [0.55, '#FF9E00'],
+    [1, '#FF2E88'],
+  ]);
   disc(c, mid, mid, r);
-  // Cut the retro horizontal slits out of the lower half.
-  c.globalCompositeOperation = 'destination-out';
-  for (let i = 0; i < 7; i++) {
-    const slitY = mid + r * (0.04 + i * 0.14);
-    box(c, 0, slitY, size, r * (0.03 + i * 0.022));
-  }
+  cutSunSlits(c, mid, r, size);
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.shadowColor = '#FF7A18';
@@ -100,20 +105,30 @@ export function drawSun(ctx, cx, cy, r, alpha = 0.92) {
 /** Pale moon with a cyan halo for night grades, plus a few hard craters. */
 export function drawMoon(ctx, cx, cy, r) {
   ctx.save();
-  const halo = ctx.createRadialGradient(cx, cy, r * 0.4, cx, cy, r * 2.4);
-  halo.addColorStop(0, 'rgba(0,229,255,0.3)');
-  halo.addColorStop(1, 'rgba(0,229,255,0)');
-  ctx.fillStyle = halo;
+  ctx.fillStyle = radial(ctx, cx, cy, r * 0.4, cx, cy, r * 2.4, [
+    [0, 'rgba(0,229,255,0.3)'],
+    [1, 'rgba(0,229,255,0)'],
+  ]);
   disc(ctx, cx, cy, r * 2.4);
-  const face = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.1, cx, cy, r);
-  face.addColorStop(0, '#F4FBFF');
-  face.addColorStop(1, '#9FD8E8');
-  ctx.fillStyle = face;
+  ctx.fillStyle = radial(ctx, cx - r * 0.3, cy - r * 0.3, r * 0.1, cx, cy, r, [
+    [0, '#F4FBFF'],
+    [1, '#9FD8E8'],
+  ]);
   disc(ctx, cx, cy, r);
   ctx.fillStyle = 'rgba(13,0,26,0.14)';
-  const craters = [[-0.3, 0.1, 0.18], [0.25, -0.25, 0.12], [0.15, 0.35, 0.1]];
-  for (const [dx, dy, dr] of craters) disc(ctx, cx + dx * r, cy + dy * r, dr * r);
+  for (const [dx, dy, dr] of [[-0.3, 0.1, 0.18], [0.25, -0.25, 0.12], [0.15, 0.35, 0.1]]) {
+    disc(ctx, cx + dx * r, cy + dy * r, dr * r);
+  }
   ctx.restore();
+}
+
+// A four-point sparkle path centred on (px, py).
+function sparkle(c, px, py, r) {
+  c.moveTo(px, py - r * 2);
+  c.quadraticCurveTo(px, py, px + r * 2, py);
+  c.quadraticCurveTo(px, py, px, py + r * 2);
+  c.quadraticCurveTo(px, py, px - r * 2, py);
+  c.quadraticCurveTo(px, py, px, py - r * 2);
 }
 
 /** Tiny four-point stars scattered across a night sky region. */
@@ -126,18 +141,32 @@ export function drawStars(ctx, x, y, w, h, n, seed) {
     const py = y + rnd() * h;
     const r = Math.min(w, h) * (0.006 + rnd() * 0.008);
     ctx.globalAlpha = 0.5 + rnd() * 0.5;
-    trace(ctx, (c) => {
-      c.moveTo(px, py - r * 2);
-      c.quadraticCurveTo(px, py, px + r * 2, py);
-      c.quadraticCurveTo(px, py, px, py + r * 2);
-      c.quadraticCurveTo(px, py, px - r * 2, py);
-      c.quadraticCurveTo(px, py, px, py - r * 2);
-    });
+    trace(ctx, (c) => sparkle(c, px, py, r));
   }
   ctx.restore();
 }
 
 /* ------------------------------------------------------------------ palm */
+
+// The tapered curved trunk outline.
+function palmTrunk(c, baseX, baseY, topX, topY, height, lean, w0, w1) {
+  c.moveTo(baseX - w0, baseY);
+  c.bezierCurveTo(baseX - w0 + lean * height * 0.35, baseY - height * 0.55, topX - w1 - lean * height * 0.12, topY + height * 0.22, topX - w1, topY);
+  c.lineTo(topX + w1, topY);
+  c.bezierCurveTo(topX + w1 - lean * height * 0.12, topY + height * 0.22, baseX + w0 + lean * height * 0.35, baseY - height * 0.55, baseX + w0, baseY);
+}
+
+// One drooping frond from the crown to its tip.
+function palmFrond(c, topX, topY, ang, len) {
+  const tipX = topX + Math.cos(ang) * len;
+  const tipY = topY + Math.sin(ang) * len * 0.7 + len * 0.2;
+  const midX = topX + Math.cos(ang) * len * 0.5;
+  const midY = topY + Math.sin(ang) * len * 0.35 - len * 0.1;
+  const fat = len * 0.13;
+  c.moveTo(topX, topY);
+  c.quadraticCurveTo(midX, midY - fat, tipX, tipY);
+  c.quadraticCurveTo(midX, midY + fat * 0.55, topX, topY);
+}
 
 /** Black palm silhouette: tapered curved trunk, nine drooping fronds, nuts. */
 export function drawPalm(ctx, baseX, baseY, height, lean, color = INK) {
@@ -147,28 +176,15 @@ export function drawPalm(ctx, baseX, baseY, height, lean, color = INK) {
   ctx.fillStyle = color;
   const w0 = height * 0.048;
   const w1 = height * 0.02;
-  trace(ctx, (c) => {
-    c.moveTo(baseX - w0, baseY);
-    c.bezierCurveTo(baseX - w0 + lean * height * 0.35, baseY - height * 0.55, topX - w1 - lean * height * 0.12, topY + height * 0.22, topX - w1, topY);
-    c.lineTo(topX + w1, topY);
-    c.bezierCurveTo(topX + w1 - lean * height * 0.12, topY + height * 0.22, baseX + w0 + lean * height * 0.35, baseY - height * 0.55, baseX + w0, baseY);
-  });
+  trace(ctx, (c) => palmTrunk(c, baseX, baseY, topX, topY, height, lean, w0, w1));
   const fronds = 9;
   for (let i = 0; i < fronds; i++) {
     const t = i / (fronds - 1);
     const ang = ((-168 + t * 156) * Math.PI) / 180;
     const len = height * (0.34 + 0.12 * Math.sin(t * Math.PI));
-    const tipX = topX + Math.cos(ang) * len;
-    const tipY = topY + Math.sin(ang) * len * 0.7 + len * 0.2;
-    const midX = topX + Math.cos(ang) * len * 0.5;
-    const midY = topY + Math.sin(ang) * len * 0.35 - len * 0.1;
-    const fat = len * 0.13;
-    trace(ctx, (c) => {
-      c.moveTo(topX, topY);
-      c.quadraticCurveTo(midX, midY - fat, tipX, tipY);
-      c.quadraticCurveTo(midX, midY + fat * 0.55, topX, topY);
-    });
+    trace(ctx, (c) => palmFrond(c, topX, topY, ang, len));
   }
+  // Two nuts in ONE path + one fill (kept verbatim for pixel-identical AA).
   ctx.beginPath();
   ctx.arc(topX - height * 0.03, topY + height * 0.04, height * 0.026, 0, TAU);
   ctx.arc(topX + height * 0.032, topY + height * 0.052, height * 0.022, 0, TAU);
@@ -224,6 +240,43 @@ export function drawPlane(ctx, cx, cy, s, tilt = -0.08) {
 
 /* --------------------------------------------------------------- skyline */
 
+// Glowing roofline along a tower top.
+function towerRoof(c, bx, topY, bw, h, neon) {
+  c.save();
+  c.strokeStyle = neon;
+  c.globalAlpha = 0.9;
+  c.lineWidth = Math.max(1.5, h * 0.012);
+  c.shadowColor = neon;
+  c.shadowBlur = h * 0.04;
+  seg(c, bx, topY, bx + bw, topY);
+  c.restore();
+}
+
+// Lit windows on a loose grid inside a tower.
+function towerWindows(c, rnd, bx, topY, bw, baseY, h, neon) {
+  const step = Math.max(4, h * 0.035);
+  c.fillStyle = neon;
+  for (let wy = topY + step; wy < baseY - step * 0.5; wy += step) {
+    for (let wx = bx + step * 0.6; wx < bx + bw - step * 0.4; wx += step) {
+      if (rnd() < 0.4) {
+        c.globalAlpha = 0.45 + rnd() * 0.45;
+        box(c, wx, wy, step * 0.32, step * 0.32);
+      }
+    }
+  }
+  c.globalAlpha = 1;
+}
+
+// Occasional antenna mast with a gold beacon.
+function towerMast(c, rnd, bx, topY, bw, h) {
+  if (rnd() >= 0.28) return;
+  c.strokeStyle = '#FF6EC7';
+  c.lineWidth = Math.max(1, h * 0.008);
+  seg(c, bx + bw * 0.5, topY, bx + bw * 0.5, topY - h * 0.12);
+  c.fillStyle = '#FFD60A';
+  disc(c, bx + bw * 0.5, topY - h * 0.12, Math.max(1.5, h * 0.012));
+}
+
 /** Neon towers rising from the bottom of a region: rooflines, windows, masts. */
 export function drawSkyline(ctx, x, y, w, h, seed) {
   const rnd = rng(seed);
@@ -234,43 +287,134 @@ export function drawSkyline(ctx, x, y, w, h, seed) {
     const bw = w * (0.06 + rnd() * 0.07);
     const bh = Math.min(h * (0.25 + rnd() * 0.55), bw * 5);
     const neon = rnd() > 0.5 ? '#FF2E88' : '#00E5FF';
+    const topY = baseY - bh;
     ctx.fillStyle = INK;
-    box(ctx, bx, baseY - bh, bw, bh);
-    // Glowing roofline.
-    ctx.save();
-    ctx.strokeStyle = neon;
-    ctx.globalAlpha = 0.9;
-    ctx.lineWidth = Math.max(1.5, h * 0.012);
-    ctx.shadowColor = neon;
-    ctx.shadowBlur = h * 0.04;
-    seg(ctx, bx, baseY - bh, bx + bw, baseY - bh);
-    ctx.restore();
-    // Lit windows on a loose grid.
-    const step = Math.max(4, h * 0.035);
-    ctx.fillStyle = neon;
-    for (let wy = baseY - bh + step; wy < baseY - step * 0.5; wy += step) {
-      for (let wx = bx + step * 0.6; wx < bx + bw - step * 0.4; wx += step) {
-        if (rnd() < 0.4) {
-          ctx.globalAlpha = 0.45 + rnd() * 0.45;
-          box(ctx, wx, wy, step * 0.32, step * 0.32);
-        }
-      }
-    }
-    ctx.globalAlpha = 1;
-    // Occasional antenna mast with a gold beacon.
-    if (rnd() < 0.28) {
-      ctx.strokeStyle = '#FF6EC7';
-      ctx.lineWidth = Math.max(1, h * 0.008);
-      seg(ctx, bx + bw * 0.5, baseY - bh, bx + bw * 0.5, baseY - bh - h * 0.12);
-      ctx.fillStyle = '#FFD60A';
-      disc(ctx, bx + bw * 0.5, baseY - bh - h * 0.12, Math.max(1.5, h * 0.012));
-    }
+    box(ctx, bx, topY, bw, bh);
+    towerRoof(ctx, bx, topY, bw, h, neon);
+    towerWindows(ctx, rnd, bx, topY, bw, baseY, h, neon);
+    towerMast(ctx, rnd, bx, topY, bw, h);
     bx += bw + w * 0.008;
   }
   ctx.restore();
 }
 
 /* ------------------------------------------------------------------- car */
+
+// The body silhouette as a path-command table (fractions of W / H). Replayed
+// into a Path2D so the outline is identical to the hand-written path.
+const CAR_BODY = [
+  ['moveTo', 0.02, 0.6],
+  ['lineTo', 0.035, 0.4],
+  ['lineTo', 0, 0.34],
+  ['lineTo', 0.1, 0.32],
+  ['lineTo', 0.12, 0.4],
+  ['quadraticCurveTo', 0.2, 0.36, 0.26, 0.22],
+  ['quadraticCurveTo', 0.35, 0.08, 0.47, 0.09],
+  ['quadraticCurveTo', 0.57, 0.11, 0.64, 0.27],
+  ['quadraticCurveTo', 0.81, 0.31, 0.965, 0.41],
+  ['quadraticCurveTo', 0.995, 0.45, 0.99, 0.57],
+  ['lineTo', 0.9, 0.65],
+  ['arc', 0.78, 0.65, 0.115, 0, Math.PI, true],
+  ['lineTo', 0.34, 0.65],
+  ['arc', 0.22, 0.65, 0.115, 0, Math.PI, true],
+];
+
+function carBodyPath(W, H) {
+  const body = new Path2D();
+  for (const [cmd, ...a] of CAR_BODY) {
+    if (cmd === 'arc') body.arc(a[0] * W, a[1] * H, a[2] * W, a[3], a[4], a[5]);
+    else if (cmd === 'quadraticCurveTo') body.quadraticCurveTo(a[0] * W, a[1] * H, a[2] * W, a[3] * H);
+    else body[cmd](a[0] * W, a[1] * H);
+  }
+  body.closePath();
+  return body;
+}
+
+// Tire smoke drifting off the rear.
+function carSmoke(c, W, H) {
+  const rnd = rng(4242);
+  for (let i = 0; i < 5; i++) {
+    const px = -W * (0.02 + i * 0.045);
+    const py = H * (0.62 - i * 0.05) + rnd() * H * 0.06;
+    const pr = W * (0.045 + i * 0.02);
+    c.fillStyle = i % 2 ? 'rgba(255,110,199,0.16)' : 'rgba(210,200,220,0.18)';
+    disc(c, px, py, pr);
+  }
+}
+
+// Neon underglow pooled on the ground (screen blend, squashed disc).
+function carUnderglow(c, W, H, accent) {
+  c.save();
+  c.globalCompositeOperation = 'screen';
+  c.fillStyle = radial(c, W * 0.5, H * 0.9, W * 0.02, W * 0.5, H * 0.9, W * 0.55, [
+    [0, accent === '#00E5FF' ? 'rgba(0,229,255,0.55)' : 'rgba(255,46,136,0.55)'],
+    [1, 'rgba(0,0,0,0)'],
+  ]);
+  c.scale(1, 0.26);
+  disc(c, W * 0.5, H * 0.9 / 0.26, W * 0.55);
+  c.restore();
+}
+
+// Magenta neon tracing the roofline.
+function carRoofline(c, W, H) {
+  c.save();
+  c.strokeStyle = '#FF2E88';
+  c.globalAlpha = 0.85;
+  c.lineWidth = Math.max(1.5, W * 0.008);
+  c.shadowColor = '#FF2E88';
+  c.shadowBlur = W * 0.02;
+  c.beginPath();
+  c.moveTo(W * 0.12, H * 0.4);
+  c.quadraticCurveTo(W * 0.2, H * 0.36, W * 0.26, H * 0.22);
+  c.quadraticCurveTo(W * 0.35, H * 0.08, W * 0.47, H * 0.09);
+  c.quadraticCurveTo(W * 0.57, H * 0.11, W * 0.64, H * 0.27);
+  c.quadraticCurveTo(W * 0.81, H * 0.31, W * 0.965, H * 0.41);
+  c.stroke();
+  c.restore();
+}
+
+// Wheels with neon rims.
+function carWheels(c, W, H, accent) {
+  for (const wx of [W * 0.22, W * 0.78]) {
+    c.fillStyle = '#050308';
+    disc(c, wx, H * 0.65, W * 0.105);
+    c.strokeStyle = accent;
+    c.globalAlpha = 0.9;
+    c.lineWidth = Math.max(1.2, W * 0.006);
+    ring(c, wx, H * 0.65, W * 0.06);
+    c.globalAlpha = 1;
+  }
+}
+
+// Headlight + beam, and the tiny yellow plate up front.
+function carFront(c, W, H) {
+  c.fillStyle = '#FFD60A';
+  trace(c, (p) => {
+    p.moveTo(W * 0.955, H * 0.43);
+    p.lineTo(W * 0.99, H * 0.46);
+    p.lineTo(W * 0.955, H * 0.49);
+  });
+  const beam = c.createLinearGradient(W * 0.99, 0, W * 1.3, 0);
+  beam.addColorStop(0, 'rgba(255,214,10,0.3)');
+  beam.addColorStop(1, 'rgba(255,214,10,0)');
+  c.fillStyle = beam;
+  trace(c, (p) => {
+    p.moveTo(W * 0.99, H * 0.44);
+    p.lineTo(W * 1.3, H * 0.3);
+    p.lineTo(W * 1.3, H * 0.62);
+    p.lineTo(W * 0.99, H * 0.5);
+  });
+  c.fillStyle = '#FFD60A';
+  box(c, W * 0.025, H * 0.48, W * 0.09, H * 0.12);
+  c.strokeStyle = INK;
+  c.lineWidth = Math.max(1, W * 0.003);
+  c.strokeRect(W * 0.025, H * 0.48, W * 0.09, H * 0.12);
+  c.fillStyle = INK;
+  c.font = `900 ${W * 0.05}px ${DISPLAY}`;
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillText('VICE', W * 0.07, H * 0.545);
+}
 
 /** Low sport car facing right, tilted, with underglow, tire smoke, speed
  *  lines, neon rims and a tiny yellow plate. Box: W wide, W*0.3 tall. */
@@ -280,70 +424,17 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
   ctx.translate(x + W / 2, y + H / 2);
   ctx.rotate(tilt);
   ctx.translate(-W / 2, -H / 2);
-
-  // Tire smoke drifting off the rear.
-  const rnd = rng(4242);
-  for (let i = 0; i < 5; i++) {
-    const px = -W * (0.02 + i * 0.045);
-    const py = H * (0.62 - i * 0.05) + rnd() * H * 0.06;
-    const pr = W * (0.045 + i * 0.02);
-    ctx.fillStyle = i % 2 ? 'rgba(255,110,199,0.16)' : 'rgba(210,200,220,0.18)';
-    disc(ctx, px, py, pr);
-  }
+  carSmoke(ctx, W, H);
   // Speed lines behind the car.
   ctx.strokeStyle = accent;
   ctx.globalAlpha = 0.4;
   ctx.lineWidth = Math.max(1.5, W * 0.006);
   for (const ly of [0.3, 0.46, 0.6]) seg(ctx, -W * 0.24, H * ly, -W * 0.02, H * ly);
   ctx.globalAlpha = 1;
-
-  // Neon underglow pooled on the ground.
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen';
-  const glow = ctx.createRadialGradient(W * 0.5, H * 0.9, W * 0.02, W * 0.5, H * 0.9, W * 0.55);
-  glow.addColorStop(0, accent === '#00E5FF' ? 'rgba(0,229,255,0.55)' : 'rgba(255,46,136,0.55)');
-  glow.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = glow;
-  ctx.scale(1, 0.26);
-  disc(ctx, W * 0.5, H * 0.9 / 0.26, W * 0.55);
-  ctx.restore();
-
-  // Body silhouette with wheel arches cut into the bottom line.
-  const body = new Path2D();
-  body.moveTo(W * 0.02, H * 0.6);
-  body.lineTo(W * 0.035, H * 0.4);
-  body.lineTo(0, H * 0.34);
-  body.lineTo(W * 0.1, H * 0.32);
-  body.lineTo(W * 0.12, H * 0.4);
-  body.quadraticCurveTo(W * 0.2, H * 0.36, W * 0.26, H * 0.22);
-  body.quadraticCurveTo(W * 0.35, H * 0.08, W * 0.47, H * 0.09);
-  body.quadraticCurveTo(W * 0.57, H * 0.11, W * 0.64, H * 0.27);
-  body.quadraticCurveTo(W * 0.81, H * 0.31, W * 0.965, H * 0.41);
-  body.quadraticCurveTo(W * 0.995, H * 0.45, W * 0.99, H * 0.57);
-  body.lineTo(W * 0.9, H * 0.65);
-  body.arc(W * 0.78, H * 0.65, W * 0.115, 0, Math.PI, true);
-  body.lineTo(W * 0.34, H * 0.65);
-  body.arc(W * 0.22, H * 0.65, W * 0.115, 0, Math.PI, true);
-  body.closePath();
+  carUnderglow(ctx, W, H, accent);
   ctx.fillStyle = INK;
-  ctx.fill(body);
-
-  // Magenta neon tracing the roofline.
-  ctx.save();
-  ctx.strokeStyle = '#FF2E88';
-  ctx.globalAlpha = 0.85;
-  ctx.lineWidth = Math.max(1.5, W * 0.008);
-  ctx.shadowColor = '#FF2E88';
-  ctx.shadowBlur = W * 0.02;
-  ctx.beginPath();
-  ctx.moveTo(W * 0.12, H * 0.4);
-  ctx.quadraticCurveTo(W * 0.2, H * 0.36, W * 0.26, H * 0.22);
-  ctx.quadraticCurveTo(W * 0.35, H * 0.08, W * 0.47, H * 0.09);
-  ctx.quadraticCurveTo(W * 0.57, H * 0.11, W * 0.64, H * 0.27);
-  ctx.quadraticCurveTo(W * 0.81, H * 0.31, W * 0.965, H * 0.41);
-  ctx.stroke();
-  ctx.restore();
-
+  ctx.fill(carBodyPath(W, H));
+  carRoofline(ctx, W, H);
   // Cyan glasshouse.
   ctx.fillStyle = 'rgba(0,229,255,0.3)';
   trace(ctx, (c) => {
@@ -351,47 +442,8 @@ export function drawCar(ctx, x, y, W, accent = '#00E5FF', tilt = -0.045) {
     c.quadraticCurveTo(W * 0.37, H * 0.13, W * 0.46, H * 0.13);
     c.quadraticCurveTo(W * 0.54, H * 0.14, W * 0.59, H * 0.25);
   });
-
-  // Wheels with neon rims.
-  for (const wx of [W * 0.22, W * 0.78]) {
-    ctx.fillStyle = '#050308';
-    disc(ctx, wx, H * 0.65, W * 0.105);
-    ctx.strokeStyle = accent;
-    ctx.globalAlpha = 0.9;
-    ctx.lineWidth = Math.max(1.2, W * 0.006);
-    ring(ctx, wx, H * 0.65, W * 0.06);
-    ctx.globalAlpha = 1;
-  }
-
-  // Headlight + beam.
-  ctx.fillStyle = '#FFD60A';
-  trace(ctx, (c) => {
-    c.moveTo(W * 0.955, H * 0.43);
-    c.lineTo(W * 0.99, H * 0.46);
-    c.lineTo(W * 0.955, H * 0.49);
-  });
-  const beam = ctx.createLinearGradient(W * 0.99, 0, W * 1.3, 0);
-  beam.addColorStop(0, 'rgba(255,214,10,0.3)');
-  beam.addColorStop(1, 'rgba(255,214,10,0)');
-  ctx.fillStyle = beam;
-  trace(ctx, (c) => {
-    c.moveTo(W * 0.99, H * 0.44);
-    c.lineTo(W * 1.3, H * 0.3);
-    c.lineTo(W * 1.3, H * 0.62);
-    c.lineTo(W * 0.99, H * 0.5);
-  });
-
-  // Tiny yellow plate up front.
-  ctx.fillStyle = '#FFD60A';
-  box(ctx, W * 0.025, H * 0.48, W * 0.09, H * 0.12);
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = Math.max(1, W * 0.003);
-  ctx.strokeRect(W * 0.025, H * 0.48, W * 0.09, H * 0.12);
-  ctx.fillStyle = INK;
-  ctx.font = `900 ${W * 0.05}px ${DISPLAY}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('VICE', W * 0.07, H * 0.545);
+  carWheels(ctx, W, H, accent);
+  carFront(ctx, W, H);
   ctx.restore();
 }
 
@@ -511,8 +563,7 @@ export function drawDuffel(ctx, cx, cy, s) {
   ctx.arc(0, -s * 0.22, s * 0.2, Math.PI, TAU);
   ctx.stroke();
   // Cash spilling from the open top.
-  const spills = [[-0.18, -0.3, -0.3], [0.05, -0.36, 0.2], [0.24, -0.28, 0.5]];
-  for (const [dx, dy, rot] of spills) {
+  for (const [dx, dy, rot] of [[-0.18, -0.3, -0.3], [0.05, -0.36, 0.2], [0.24, -0.28, 0.5]]) {
     ctx.save();
     ctx.translate(dx * s, dy * s);
     ctx.rotate(rot);
@@ -569,8 +620,30 @@ export function drawPoliceBar(ctx, x, y, w) {
 
 /* ----------------------------------------------------------- street scene */
 
-/** Neon shop signs, hanging wires, a crowd of silhouettes and wet-road glow.
- *  Sign text shrinks to fit its box so nothing garbles or overflows. */
+// A neon shop sign whose text shrinks to fit its box so nothing garbles.
+function neonSign(ctx, sx, sy, sw, sh, text, neon, m) {
+  ctx.save();
+  ctx.strokeStyle = neon;
+  ctx.lineWidth = Math.max(2, m * 0.012);
+  ctx.shadowColor = neon;
+  ctx.shadowBlur = m * 0.05;
+  ctx.beginPath();
+  ctx.roundRect(sx, sy, sw, sh, sh * 0.18);
+  ctx.stroke();
+  ctx.fillStyle = neon;
+  let fs = sh * 0.5;
+  ctx.font = `900 ${fs}px ${DISPLAY}`;
+  while (ctx.measureText(text).width > sw * 0.86 && fs > 6) {
+    fs *= 0.9;
+    ctx.font = `900 ${fs}px ${DISPLAY}`;
+  }
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, sx + sw / 2, sy + sh * 0.54);
+  ctx.restore();
+}
+
+/** Neon shop signs, hanging wires, a crowd of silhouettes and wet-road glow. */
 export function drawStreetScene(ctx, x, y, w, h, seed) {
   const rnd = rng(seed);
   const m = Math.min(w, h);
@@ -588,30 +661,9 @@ export function drawStreetScene(ctx, x, y, w, h, seed) {
   }
   const neonA = rnd() > 0.5 ? '#FF2E88' : '#00E5FF';
   const neonB = neonA === '#FF2E88' ? '#FFD60A' : '#FF6EC7';
-  const sign = (sx, sy, sw, sh, text, neon) => {
-    ctx.save();
-    ctx.strokeStyle = neon;
-    ctx.lineWidth = Math.max(2, m * 0.012);
-    ctx.shadowColor = neon;
-    ctx.shadowBlur = m * 0.05;
-    ctx.beginPath();
-    ctx.roundRect(sx, sy, sw, sh, sh * 0.18);
-    ctx.stroke();
-    ctx.fillStyle = neon;
-    let fs = sh * 0.5;
-    ctx.font = `900 ${fs}px ${DISPLAY}`;
-    while (ctx.measureText(text).width > sw * 0.86 && fs > 6) {
-      fs *= 0.9;
-      ctx.font = `900 ${fs}px ${DISPLAY}`;
-    }
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, sx + sw / 2, sy + sh * 0.54);
-    ctx.restore();
-  };
   const sh = m * 0.13;
-  sign(x + w * 0.06, y + h * 0.09, Math.min(w * 0.4, m * 0.42), sh, pick(), neonA);
-  sign(x + w * 0.62, y + h * 0.07, Math.min(w * 0.3, m * 0.3), sh * 1.5, pick(), neonB);
+  neonSign(ctx, x + w * 0.06, y + h * 0.09, Math.min(w * 0.4, m * 0.42), sh, pick(), neonA, m);
+  neonSign(ctx, x + w * 0.62, y + h * 0.07, Math.min(w * 0.3, m * 0.3), sh * 1.5, pick(), neonB, m);
   // Street lamp at the right edge, clear of the centred face.
   const lx = x + w * 0.9;
   ctx.strokeStyle = INK;
@@ -653,6 +705,31 @@ export function drawStreetScene(ctx, x, y, w, h, seed) {
 
 /* ------------------------------------------------------------ beach scene */
 
+// The jetski + rider and its wake. `h` is the panel height (sets the wake width).
+function jetski(ctx, jx, jy, js, h) {
+  ctx.fillStyle = INK;
+  trace(ctx, (c) => {
+    c.moveTo(jx - js * 0.5, jy);
+    c.quadraticCurveTo(jx - js * 0.2, jy - js * 0.22, jx + js * 0.3, jy - js * 0.16);
+    c.lineTo(jx + js * 0.5, jy);
+    c.quadraticCurveTo(jx, jy + js * 0.14, jx - js * 0.5, jy);
+  });
+  disc(ctx, jx - js * 0.05, jy - js * 0.34, js * 0.12);
+  trace(ctx, (c) => {
+    c.moveTo(jx - js * 0.12, jy - js * 0.24);
+    c.quadraticCurveTo(jx, jy - js * 0.3, jx + js * 0.14, jy - js * 0.2);
+    c.lineTo(jx + js * 0.1, jy - js * 0.12);
+  });
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = Math.max(1.5, h * 0.007);
+  ctx.beginPath();
+  ctx.moveTo(jx - js * 0.5, jy + js * 0.05);
+  ctx.lineTo(jx - js * 1.1, jy + js * 0.22);
+  ctx.moveTo(jx - js * 0.5, jy + js * 0.08);
+  ctx.lineTo(jx - js * 1.0, jy + js * 0.34);
+  ctx.stroke();
+}
+
 /** Sea horizon with waves, a jetski and its wake, a distant sail, palm edge. */
 export function drawBeachScene(ctx, x, y, w, h, seed, night = false) {
   const rnd = rng(seed);
@@ -689,32 +766,7 @@ export function drawBeachScene(ctx, x, y, w, h, seed, night = false) {
     }
     ctx.stroke();
   }
-  // Jetski + rider.
-  const jx = x + w * 0.32;
-  const jy = hy + h * 0.08;
-  const js = w * 0.13;
-  ctx.fillStyle = INK;
-  trace(ctx, (c) => {
-    c.moveTo(jx - js * 0.5, jy);
-    c.quadraticCurveTo(jx - js * 0.2, jy - js * 0.22, jx + js * 0.3, jy - js * 0.16);
-    c.lineTo(jx + js * 0.5, jy);
-    c.quadraticCurveTo(jx, jy + js * 0.14, jx - js * 0.5, jy);
-  });
-  disc(ctx, jx - js * 0.05, jy - js * 0.34, js * 0.12);
-  trace(ctx, (c) => {
-    c.moveTo(jx - js * 0.12, jy - js * 0.24);
-    c.quadraticCurveTo(jx, jy - js * 0.3, jx + js * 0.14, jy - js * 0.2);
-    c.lineTo(jx + js * 0.1, jy - js * 0.12);
-  });
-  // Wake.
-  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-  ctx.lineWidth = Math.max(1.5, h * 0.007);
-  ctx.beginPath();
-  ctx.moveTo(jx - js * 0.5, jy + js * 0.05);
-  ctx.lineTo(jx - js * 1.1, jy + js * 0.22);
-  ctx.moveTo(jx - js * 0.5, jy + js * 0.08);
-  ctx.lineTo(jx - js * 1.0, jy + js * 0.34);
-  ctx.stroke();
+  jetski(ctx, x + w * 0.32, hy + h * 0.08, w * 0.13, h);
   // Distant sail.
   const sx = x + w * 0.82;
   ctx.fillStyle = night ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.85)';
@@ -732,21 +784,28 @@ export function drawBeachScene(ctx, x, y, w, h, seed, night = false) {
 
 /* --------------------------------------------------------------- vignette */
 
-/** Small filler panels: 0 helicopter, 1 money, 2 police bar, 3 duffel of cash.
- *  Props sit in the lower half so they never cross the face in the upper third. */
-export function drawVignette(ctx, x, y, w, h, variant, seed) {
-  if (variant === 0) {
-    drawHelicopter(ctx, x + w * 0.5, y + h * 0.78, Math.min(w, h) * 0.58);
+// Small filler panels: props sit in the lower half so they never cross the face
+// in the upper third. Variant 0 helicopter, 1 money, 2 police bar, 3 duffel.
+const VIGNETTES = [
+  (ctx, x, y, w, h, m, seed) => {
+    drawHelicopter(ctx, x + w * 0.5, y + h * 0.78, m * 0.58);
     drawBirds(ctx, x + w * 0.08, y + h * 0.05, w * 0.3, h * 0.1, 2, seed + 9);
-  } else if (variant === 1) {
+  },
+  (ctx, x, y, w, h, m, seed) => {
     drawMoney(ctx, x, y + h * 0.62, w, h * 0.36, 7, seed);
-  } else if (variant === 2) {
+  },
+  (ctx, x, y, w, h, m, seed) => {
     drawPoliceBar(ctx, x + w * 0.18, y + h * 0.8, w * 0.64);
     drawMoney(ctx, x + w * 0.1, y + h * 0.62, w * 0.8, h * 0.16, 3, seed + 3);
-  } else {
-    drawDuffel(ctx, x + w * 0.5, y + h * 0.8, Math.min(w, h) * 0.62);
+  },
+  (ctx, x, y, w, h, m, seed) => {
+    drawDuffel(ctx, x + w * 0.5, y + h * 0.8, m * 0.62);
     drawMoney(ctx, x + w * 0.1, y + h * 0.62, w * 0.8, h * 0.16, 3, seed + 5);
-  }
+  },
+];
+
+export function drawVignette(ctx, x, y, w, h, variant, seed) {
+  VIGNETTES[variant % 4](ctx, x, y, w, h, Math.min(w, h), seed);
 }
 
 /* -------------------------------------------------- halftone + film grain */
@@ -754,6 +813,7 @@ export function drawVignette(ctx, x, y, w, h, variant, seed) {
 let dotTile = null;
 let noiseTile = null;
 
+// 12px tile, two dots in ONE path + one fill (verbatim for pixel-identical AA).
 function getDotTile() {
   if (dotTile) return dotTile;
   const t = document.createElement('canvas');
@@ -838,19 +898,18 @@ export function drawGrain(ctx, w, h) {
 
 /* --------------------------------------------------------- panel borders */
 
-/** v2: crisp, straight, uniform comic borders (no jitter), a neon edge glow on
- *  the hero and one story panel, and a heavier outer frame. Panels tile
- *  exactly, so shared edges read as one clean ink line. */
+/** Crisp, straight, uniform comic borders (no jitter), a neon edge glow on the
+ *  hero and one story panel, and a heavier outer frame. Panels tile exactly, so
+ *  shared edges read as one clean ink line. */
 export function drawPanelBorders(ctx, panels, w, h) {
   const lw = Math.max(4, Math.min(7, Math.min(w, h) * 0.006));
   ctx.save();
   ctx.strokeStyle = INK;
   ctx.lineJoin = 'miter';
   ctx.lineWidth = lw;
-  for (const p of panels) {
-    ctx.strokeRect(p.x + lw / 2, p.y + lw / 2, p.w - lw, p.h - lw);
-  }
+  for (const p of panels) ctx.strokeRect(p.x + lw / 2, p.y + lw / 2, p.w - lw, p.h - lw);
   const hero = panels.find((p) => p.hero) ?? panels[0];
+  const story = panels[Math.min(3, panels.length - 1)];
   ctx.save();
   ctx.globalAlpha = 0.55;
   ctx.lineWidth = lw * 0.45;
@@ -858,7 +917,6 @@ export function drawPanelBorders(ctx, panels, w, h) {
   ctx.shadowColor = '#00E5FF';
   ctx.shadowBlur = lw * 2.2;
   seg(ctx, hero.x + lw, hero.y + lw * 0.8, hero.x + hero.w - lw, hero.y + lw * 0.8);
-  const story = panels[Math.min(3, panels.length - 1)];
   ctx.strokeStyle = '#FF2E88';
   ctx.shadowColor = '#FF2E88';
   seg(ctx, story.x + lw, story.y + story.h - lw * 0.8, story.x + story.w - lw, story.y + story.h - lw * 0.8);

@@ -1,10 +1,14 @@
-// cover.js — the ONE renderer behind both the live preview and the PNG export.
+// cover.js — the ONE renderer behind both the live preview and the PNG export (v3).
 // Same canvas calls, same seeded decor, so what you see is exactly what you get.
 //
-// v2 pipeline: panels (face-safe photo via framing.js + bold grade + scene
-// action + halftone) -> crisp comic borders -> foreground palms -> grain ->
-// stickers -> giant caption lettering. The framing engine guarantees a face is
-// whole or absent in every panel; the renderer just draws the frame it returns.
+// Pipeline: panels (face-safe photo via framing.js + bold grade + scene action +
+// halftone) -> crisp comic borders -> foreground palms -> grain -> stickers ->
+// giant caption lettering -> (editor-only) selection highlight. The framing
+// engine guarantees a face is whole or absent in every panel; the renderer just
+// draws the frame it returns.
+//
+// v3 keeps the pipeline identical and lifts the per-panel work into its own pass
+// so the top-level render reads as a short sequence of whole-cover layers.
 
 import { layoutById } from './layouts.js';
 import { gradeById, paintGrade } from './grades.js';
@@ -26,8 +30,6 @@ const NIGHT_GRADES = new Set(['neon-night', 'teal-noir', 'ultraviolet']);
 // Draw a photo into a panel using its face-safe frame. A blur-fill panel first
 // gets a soft stretched copy of the photo so there are never bare gaps.
 function drawPanelPhoto(ctx, img, p, frame) {
-  const iw = img.naturalWidth;
-  const ih = img.naturalHeight;
   if (frame.bg) {
     ctx.save();
     const blurPx = Math.max(6, Math.min(p.w, p.h) * 0.04);
@@ -41,15 +43,14 @@ function drawPanelPhoto(ctx, img, p, frame) {
     ctx.fillRect(p.x, p.y, p.w, p.h);
     ctx.restore();
   }
-  const dw = iw * frame.scale;
-  const dh = ih * frame.scale;
+  const dw = img.naturalWidth * frame.scale;
+  const dh = img.naturalHeight * frame.scale;
   ctx.drawImage(img, p.x - frame.left * frame.scale, p.y - frame.top * frame.scale, dw, dh);
 }
 
-// The vector action inked over a panel's graded photo, by scene tag. Faces sit
-// in the upper third (see framing.js), so scene action is pinned to the top
-// corners and the lower half — never across the face itself. Each handler
-// receives the panel, its index (for seeding) and whether the grade is night.
+// The vector action inked over a panel's graded photo, by scene tag. Faces sit in
+// the upper third (see framing.js), so scene action is pinned to the top corners
+// and the lower half — never across the face itself.
 const SCENE_ART = {
   hero(ctx, p, idx, night, m, seed) {
     if (night) {
@@ -74,8 +75,8 @@ const SCENE_ART = {
     }
   },
   car(ctx, p) {
-    // Keep the car inside the panel: its height is 0.3*width, so cap the
-    // width on short panels so it never towers over (and covers) the face.
+    // Keep the car inside the panel: its height is 0.3*width, so cap the width on
+    // short panels so it never towers over (and covers) the face.
     const carW = Math.min(p.w * 0.84, (p.h * 0.82) / 0.3);
     const carX = p.x + (p.w - carW) / 2;
     const carY = p.y + p.h - carW * 0.3 - p.h * 0.06;
@@ -94,30 +95,12 @@ const SCENE_ART = {
 
 function sceneDecor(ctx, p, idx, night) {
   const handler = SCENE_ART[p.scene];
-  if (!handler) return;
-  handler(ctx, p, idx, night, Math.min(p.w, p.h), 1000 + idx * 77);
+  if (handler) handler(ctx, p, idx, night, Math.min(p.w, p.h), 1000 + idx * 77);
 }
 
-/**
- * Render the whole cover into ctx at w x h pixels.
- * opts.selection (panel index) draws the editor highlight; exports omit it.
- */
-export function renderCover(ctx, state, w, h, opts = {}) {
-  const layout = layoutById(state.layout);
-  const grade = gradeById(state.grade);
-  const k = clamp(state.intensity ?? 0.9, 0, 1);
-  const panels = layout.panels(w, h);
-  const edits = activeEdits(state);
-  const photos = state.photos;
-  const s = Math.min(w, h);
-  const night = NIGHT_GRADES.has(state.grade);
-
-  ctx.save();
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = '#0D001A';
-  ctx.fillRect(0, 0, w, h);
-
-  // 1. Panels: face-safe photo (or patterned placeholder), bold grade, action.
+// Pass 1 — every panel: face-safe photo (or patterned placeholder), bold grade,
+// scene action, halftone. Each panel is clipped to its own rect.
+function paintPanels(ctx, panels, edits, photos, grade, k, night) {
   panels.forEach((p, i) => {
     const edit = edits[i] ?? { photo: 0, zoom: 1, panX: 0, panY: 0 };
     const photo = photos.length ? photos[edit.photo % photos.length] : null;
@@ -138,35 +121,9 @@ export function renderCover(ctx, state, w, h, opts = {}) {
     drawPanelHalftone(ctx, p, 500 + i * 31);
     ctx.restore();
   });
-
-  // 2. Halftone corners, then the crisp uniform comic borders.
-  drawHalftone(ctx, w, h);
-  drawPanelBorders(ctx, panels, w, h);
-
-  // 3. Foreground silhouettes in the bottom corners (clear of the faces).
-  drawPalm(ctx, w * 0.03, h * 0.995, s * 0.46, 0.15);
-  drawPalm(ctx, w * 0.97, h * 0.99, s * 0.3, -0.18);
-
-  // 4. Film grain over everything.
-  drawGrain(ctx, w, h);
-
-  // 5. Stickers.
-  if (state.stickers.viceCity) stickerViceCity(ctx, w, h);
-  if (state.stickers.leonida) stickerLeonida(ctx, w, h);
-  if (state.stickers.stars) stickerStars(ctx, w, h);
-  if (state.stickers.palm) stickerPalm(ctx, w, h);
-
-  // 6. Giant caption lettering on top, bleeding across panel edges.
-  drawCaption(ctx, state, w, h);
-
-  // 7. Editor-only selection highlight (never exported).
-  if (opts.selection >= 0 && panels[opts.selection]) {
-    drawSelection(ctx, panels[opts.selection], opts.selection, s);
-  }
-  ctx.restore();
 }
 
-// Dashed cyan outline + a small label chip on the selected panel.
+// Dashed cyan outline + a small label chip on the selected panel (editor only).
 function drawSelection(ctx, p, idx, s) {
   ctx.save();
   ctx.strokeStyle = '#00E5FF';
@@ -182,6 +139,46 @@ function drawSelection(ctx, p, idx, s) {
   ctx.fillStyle = '#00E5FF';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, p.x + 16, p.y + 6 + s * 0.02);
+  ctx.restore();
+}
+
+/**
+ * Render the whole cover into ctx at w x h pixels.
+ * opts.selection (panel index) draws the editor highlight; exports omit it.
+ */
+export function renderCover(ctx, state, w, h, opts = {}) {
+  const layout = layoutById(state.layout);
+  const grade = gradeById(state.grade);
+  const k = clamp(state.intensity ?? 0.9, 0, 1);
+  const panels = layout.panels(w, h);
+  const edits = activeEdits(state);
+  const s = Math.min(w, h);
+  const night = NIGHT_GRADES.has(state.grade);
+
+  ctx.save();
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#0D001A';
+  ctx.fillRect(0, 0, w, h);
+
+  paintPanels(ctx, panels, edits, state.photos, grade, k, night);
+
+  // Halftone corners, then the crisp uniform comic borders.
+  drawHalftone(ctx, w, h);
+  drawPanelBorders(ctx, panels, w, h);
+  // Foreground silhouettes in the bottom corners (clear of the faces).
+  drawPalm(ctx, w * 0.03, h * 0.995, s * 0.46, 0.15);
+  drawPalm(ctx, w * 0.97, h * 0.99, s * 0.3, -0.18);
+  // Film grain over everything.
+  drawGrain(ctx, w, h);
+  // Stickers.
+  if (state.stickers.viceCity) stickerViceCity(ctx, w, h);
+  if (state.stickers.leonida) stickerLeonida(ctx, w, h);
+  if (state.stickers.stars) stickerStars(ctx, w, h);
+  if (state.stickers.palm) stickerPalm(ctx, w, h);
+  // Giant caption lettering on top, bleeding across panel edges.
+  drawCaption(ctx, state, w, h);
+  // Editor-only selection highlight (never exported).
+  if (opts.selection >= 0 && panels[opts.selection]) drawSelection(ctx, panels[opts.selection], opts.selection, s);
   ctx.restore();
 }
 

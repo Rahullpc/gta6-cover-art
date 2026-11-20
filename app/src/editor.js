@@ -1,12 +1,15 @@
-// editor.js — wires every control to the shared state, manages the photo roll
-// (upload, drag-drop, samples), per-panel crop/zoom/drag, and the live preview.
-// The preview is the export render scaled to fit the stage, so it is always
-// identical to the PNG the export buttons write.
+// editor.js — wires every control to the shared state (v3). Manages the photo
+// roll (upload, drag-drop, the four samples), per-panel crop/zoom/drag, and the
+// live preview. The preview is the export render scaled to fit the stage, so it
+// is always identical to the PNG the export buttons write.
 //
-// v2: dragging inverts the face-safe framing engine (framing.js), so a drag can
+// Dragging inverts the face-safe framing engine (framing.js), so a drag can
 // recompose a panel but can never push a face out of frame. The control rail is
-// compact and uses a visible, draggable scrollbar so every section is reachable
-// at 720px, and selecting a panel scrolls its crop controls into view.
+// compact with a visible, draggable scrollbar so every section is reachable at
+// 720px, and selecting a panel scrolls its crop controls into view.
+//
+// v3 keeps the wiring identical and factors the repeated button/row building into
+// small helpers; the photo roll now carries four samples instead of two.
 
 import { LAYOUTS, layoutById } from './layouts.js';
 import { GRADES, gradeById } from './grades.js';
@@ -21,6 +24,16 @@ const STICKER_MAP = { stViceCity: 'viceCity', stLeonida: 'leonida', stStars: 'st
 
 // Strip the samples/ prefix and extension for a friendly display name.
 const prettyName = (name) => name.replace(/^samples\//, '').replace(/\.[a-z]+$/i, '');
+
+// Build a button with a class, dataset keys and optional text/children.
+function button(className, dataset, text) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = className;
+  Object.assign(b.dataset, dataset);
+  if (text !== undefined) b.textContent = text;
+  return b;
+}
 
 /** Load an image element from a URL (sample path or object URL). */
 export function loadImage(url) {
@@ -180,10 +193,7 @@ export function initEditor(state) {
       img.alt = photo.name;
       const span = document.createElement('span');
       span.textContent = prettyName(photo.name);
-      const del = document.createElement('button');
-      del.type = 'button';
-      del.className = 'thumb-del';
-      del.textContent = '×';
+      const del = button('thumb-del', {}, '×');
       del.title = 'Remove photo';
       del.addEventListener('click', () => removePhoto(i));
       li.append(img, span, del);
@@ -220,11 +230,7 @@ export function initEditor(state) {
 
   const presetRow = $('presetRow');
   for (const preset of PRESETS) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'preset-btn';
-    btn.dataset.preset = preset.id;
-    btn.textContent = preset.name;
+    const btn = button('preset-btn', { preset: preset.id }, preset.name);
     btn.addEventListener('click', async () => {
       if (state.photos.length === 0) await loadSamples(preset.photos);
       applyPreset(state, preset);
@@ -256,10 +262,7 @@ export function initEditor(state) {
 
   const layoutRow = $('layoutRow');
   for (const layout of LAYOUTS) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'layout-btn';
-    btn.dataset.layout = layout.id;
+    const btn = button('layout-btn', { layout: layout.id });
     btn.title = layout.blurb;
     const label = document.createElement('span');
     label.textContent = layout.name;
@@ -278,10 +281,7 @@ export function initEditor(state) {
 
   const gradeRow = $('gradeRow');
   for (const grade of GRADES) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'grade-btn';
-    btn.dataset.grade = grade.id;
+    const btn = button('grade-btn', { grade: grade.id });
     const sw = document.createElement('i');
     sw.style.background = `linear-gradient(135deg, ${grade.swatch[0]}, ${grade.swatch[1]})`;
     const label = document.createElement('span');
@@ -321,10 +321,7 @@ export function initEditor(state) {
   });
   const colorRow = $('colorRow');
   for (const color of TITLE_COLORS) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'color-btn';
-    btn.dataset.color = color.id;
+    const btn = button('color-btn', { color: color.id });
     btn.title = color.name;
     btn.style.background = color.swatch;
     btn.addEventListener('click', () => {
@@ -470,11 +467,7 @@ export function initEditor(state) {
 
   const sizeRow = $('sizeRow');
   for (const size of SIZES) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'size-btn';
-    btn.dataset.size = size.id;
-    btn.textContent = `${size.w}×${size.h}`;
+    const btn = button('size-btn', { size: size.id }, `${size.w}×${size.h}`);
     btn.title = size.name;
     btn.addEventListener('click', () => {
       state.size = size.id;
@@ -486,11 +479,7 @@ export function initEditor(state) {
 
   const exportRow = $('exportRow');
   for (const size of SIZES) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'export-btn';
-    btn.dataset.export = size.id;
-    btn.textContent = `PNG ${size.w}×${size.h}`;
+    const btn = button('export-btn', { export: size.id }, `PNG ${size.w}×${size.h}`);
     btn.addEventListener('click', async () => {
       state.size = size.id;
       syncControls();

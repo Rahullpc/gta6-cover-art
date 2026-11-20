@@ -1,8 +1,8 @@
-/* Vice Cover Studio v2 — dark studio theme.
-   The control rail is compact and stays legible at 1280x720. v2's rail fix: a
-   bright, always-visible, draggable scroll thumb (native overlay scrollbars
-   disappear in headless shots), tighter section spacing, and the crop section
-   auto-scrolls into view when a panel is picked, so sections 4-7 are reachable. */
+/* Vice Cover Studio v3 — dark studio theme. The control rail stays compact and
+   legible at 1280x720. A bright, always-visible, draggable scroll thumb replaces
+   the native overlay scrollbar (which disappears in headless shots); sections
+   are tightly spaced and the crop section auto-scrolls into view when a panel is
+   picked, so sections 4-7 stay reachable on a short viewport. */
 
 /* Bundled OFL display face — loaded from app/fonts, never from the network. */
 @font-face {

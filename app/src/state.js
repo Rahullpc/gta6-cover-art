@@ -1,13 +1,20 @@
-// state.js — the shared cover state and the four one-click concepts.
+// state.js — the shared cover state and the four one-click concepts (v3).
 //
 // A concept is the two-click path from photo to finished cover: it loads the
 // sample photos (only when the user has none of their own), then sets layout,
 // grade, caption, stickers and a per-panel crop list in one shot.
 //
-// v2 crop philosophy: hero/story panels use the framing engine's head anchor
-// so the face stays whole; detail panels aim at the car / street / sky with
-// `detail: true`, putting the face fully OUT of frame instead of half-cut.
-// Every panel therefore shows either a complete face or pure scenery.
+// Crop philosophy (carried from v2): hero/story panels use the framing engine's
+// head anchor so the face stays whole; detail panels aim at the car / street /
+// sky with `detail: true`, putting the face fully OUT of frame instead of
+// half-cut. Every panel shows either a complete face or pure scenery.
+//
+// v3 ships FOUR samples (boulevard, pier, porsche, summer) and casts the two new
+// photos into the concepts: summer headlines Sunset Beach Heist and the Vice
+// Strip hero column; porsche takes the tight vignette in Sunset Heist / Neon
+// Night / Golden Duo and the Vice Strip street column. Faces sit in the top rows,
+// clear of the bottom title band; porsche's small head gets a high zoom so it
+// reads instead of becoming a dot.
 
 import { defaultEdits, layoutById } from './layouts.js';
 import { clamp } from './framing.js';
@@ -22,43 +29,50 @@ export const SIZES = [
 
 export const sizeById = (id) => SIZES.find((s) => s.id === id) ?? SIZES[0];
 
-// The two sample photos shipped with the app (made for make.fun, free to use).
-export const SAMPLE_PHOTOS = ['boulevard', 'pier'];
+// The four sample photos shipped with the app (free to use; the two new ones are
+// the boss's own photos, approved for bundling).
+export const SAMPLE_PHOTOS = ['boulevard', 'pier', 'porsche', 'summer'];
 
-// Crop shorthand for the concepts below.
-// `portrait` keeps the whole head in frame — the framing engine clamps zoom
-// and pan to the face-safe range around the head anchor.
+// Crop shorthand. `portrait` keeps the whole head in frame — the framing engine
+// clamps zoom and pan to the face-safe range around the head anchor. `moment` is
+// a scenery beat aimed away from the head; the whole-or-absent guard means these
+// read as action, never as portraits.
 const portrait = (photo, zoom = 1, panX = 0, panY = 0) => ({ photo, zoom, panX, panY });
-// `moment` is a scenery beat (car / sea / boardwalk) aimed away from the head.
-// The whole-or-absent guard means these read as action, never as portraits.
 const moment = (photo, zoom, aimX, aimY) => ({ photo, zoom, panX: 0, panY: 0, detail: true, aimX, aimY });
 
+// A concept fills in the shared caption/sticker defaults so each entry below
+// only states what makes it distinct.
+const concept = (spec) => ({
+  titlePos: 'bottom',
+  titleColor: 'white',
+  titleScale: 1,
+  intensity: 0.92,
+  stickers: { viceCity: true, leonida: false, stars: true, palm: false },
+  ...spec,
+});
+
 export const PRESETS = [
-  {
+  concept({
     id: 'sunset-heist',
     name: 'Sunset Beach Heist',
     layout: 'sunset-hero',
     grade: 'sunset',
-    intensity: 0.92,
     size: 'landscape',
     title: 'SUNSET HEIST',
     subtitle: 'A VICE CITY STORY',
-    titlePos: 'bottom',
-    titleColor: 'white',
-    titleScale: 1,
-    stickers: { viceCity: true, leonida: false, stars: true, palm: false },
-    photos: ['boulevard', 'pier'],
-    // sunset-hero slots: hero, skyline, vignette (faces) + car/beach/street scenery.
+    photos: ['boulevard', 'pier', 'summer', 'porsche'],
+    // sunset-hero slots: hero, skyline, vignette (faces) + car/beach/street.
+    // summer owns the hero; porsche's small head takes a tight vignette zoom.
     crops: [
-      portrait(0, 1.05),
-      portrait(1, 1.2, -0.3, 0),
-      portrait(0, 1.5, 0.45, 0.15),
+      portrait(2, 1.6, -0.3, 0),
+      portrait(1, 1.28, -0.25, 0),
+      portrait(3, 3.4),
       moment(0, 3, 0.18, 0.9),
-      moment(1, 2.6, 0.9, 0.62),
-      moment(0, 2.8, 0.12, 0.35),
+      moment(2, 2.2, 0.25, 0.62),
+      moment(1, 2.8, 0.12, 0.35),
     ],
-  },
-  {
+  }),
+  concept({
     id: 'neon-night',
     name: 'Neon Night Drive',
     layout: 'cinema',
@@ -67,46 +81,44 @@ export const PRESETS = [
     size: 'landscape',
     title: 'NEON NIGHT DRIVE',
     subtitle: 'AFTER DARK IN LEONIDA',
-    titlePos: 'bottom',
     titleColor: 'gold',
     titleScale: 0.94,
-    stickers: { viceCity: true, leonida: false, stars: true, palm: false },
-    photos: ['boulevard', 'pier'],
-    // cinema slots: hero, skyline, vignette (faces) + car/beach/street scenery.
+    photos: ['boulevard', 'pier', 'summer', 'porsche'],
+    // cinema slots: hero, skyline, vignette (faces) + car/beach/street. The cold
+    // grade + hero/skyline are v2's; porsche rides the top-right vignette (row 1,
+    // safe from the bottom title) at a zoom that keeps its face readable.
     crops: [
       portrait(0, 1.08),
       portrait(1, 1.28, -0.25, 0),
-      portrait(1, 1.6, 0.4, 0.1),
+      portrait(3, 2.6),
       moment(0, 3, 0.18, 0.9),
       moment(1, 2.6, 0.9, 0.62),
       moment(0, 2.8, 0.12, 0.35),
     ],
-  },
-  {
+  }),
+  concept({
     id: 'vice-strip',
     name: 'Vice Strip',
     layout: 'five-vert',
     grade: 'vice-pink',
-    intensity: 0.92,
     size: 'portrait',
     title: 'VICE STRIP',
     subtitle: 'FIVE MOMENTS - ONE CITY',
-    titlePos: 'bottom',
-    titleColor: 'white',
     titleScale: 1.02,
     stickers: { viceCity: true, leonida: true, stars: false, palm: true },
-    photos: ['boulevard'],
-    // five-vert: beach, car, hero, street, skyline — one photo re-cropped five
-    // ways; every moment keeps the whole face, zoom + pan give each its own frame.
+    photos: ['summer', 'porsche', 'boulevard', 'pier'],
+    // five-vert columns: beach, car, hero, street, skyline. summer takes the beach
+    // + hero columns, porsche the street column (tight), boulevard the car, pier
+    // the skyline. Every face sits in the upper third, clear of the title.
     crops: [
-      portrait(0, 1.2, -0.5, 0),
-      portrait(0, 1.5, 0.35, 0),
-      portrait(0, 1.02),
-      portrait(0, 1.4, -0.35, 0),
-      portrait(0, 1.3, 0.45, 0),
+      portrait(0, 1),
+      portrait(2, 1.2),
+      portrait(0, 1.05),
+      portrait(1, 1.11),
+      portrait(3, 1.3),
     ],
-  },
-  {
+  }),
+  concept({
     id: 'golden-duo',
     name: 'Golden Hour Duo',
     layout: 'quad',
@@ -115,21 +127,20 @@ export const PRESETS = [
     size: 'square',
     title: 'GOLDEN HOUR',
     subtitle: 'LEONIDA SUMMER',
-    titlePos: 'bottom',
     titleColor: 'gold',
-    titleScale: 1,
     stickers: { viceCity: false, leonida: true, stars: true, palm: false },
-    photos: ['boulevard', 'pier'],
-    // quad slots: hero, skyline, vignette (faces) + street/car/beach scenery.
+    photos: ['boulevard', 'pier', 'summer', 'porsche'],
+    // quad slots: hero, skyline, street, car, vignette, beach. porsche takes the
+    // tall vignette (props live in the lower half); summer's pool is the beach beat.
     crops: [
       portrait(0, 1.05),
       portrait(1, 1.24, -0.3, 0),
       moment(0, 2.8, 0.12, 0.35),
       moment(0, 3, 0.18, 0.9),
-      portrait(1, 1.6, 0.35, 0.1),
-      moment(1, 2.6, 0.9, 0.62),
+      portrait(3, 2.6, 0, -0.5),
+      moment(2, 2.2, 0.25, 0.62),
     ],
-  },
+  }),
 ];
 
 export const presetById = (id) => PRESETS.find((p) => p.id === id) ?? PRESETS[0];

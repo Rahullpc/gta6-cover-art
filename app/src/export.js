@@ -1,13 +1,15 @@
-// export.js — PNG export. Render the cover at a post size on a fresh canvas
-// and download it. The same renderCover() call paints the live preview, so the
-// exported file matches what the editor shows, pixel for pixel.
+// export.js — PNG export (v3). Render the cover at a post size on a fresh canvas
+// and hand it to the browser as a download. The very same renderCover() call
+// paints the live preview, so the saved file matches the editor pixel for pixel.
 
 import { renderToCanvas } from './cover.js';
 import { SIZES, sizeById } from './state.js';
 
-// Encode the canvas as a PNG blob, then trigger a download via a temporary
-// object-URL anchor. Resolves with the filename once the click has fired.
-function saveBlob(canvas, name) {
+const fileNameFor = (size) => `vice-cover-${size.w}x${size.h}.png`;
+
+// Encode a canvas to a PNG blob and fire a download through a temporary
+// object-URL anchor. Resolves with the filename once the click has happened.
+function downloadCanvas(canvas, name) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) {
@@ -15,12 +17,10 @@ function saveBlob(canvas, name) {
         return;
       }
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = name;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      const anchor = Object.assign(document.createElement('a'), { href: url, download: name });
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
       resolve(name);
     }, 'image/png');
@@ -29,12 +29,10 @@ function saveBlob(canvas, name) {
 
 /** Render + download one PNG. Resolves with the filename once saved. */
 export function exportPNG(state, sizeId) {
-  const size = sizeById(sizeId);
-  const canvas = renderToCanvas(state, sizeId);
-  return saveBlob(canvas, `vice-cover-${size.w}x${size.h}.png`);
+  return downloadCanvas(renderToCanvas(state, sizeId), fileNameFor(sizeById(sizeId)));
 }
 
-/** Download all three post sizes, one after another. */
+/** Download all three post sizes, one after another, reporting each. */
 export async function exportAll(state, onEach) {
   const names = [];
   for (const size of SIZES) {
@@ -46,7 +44,7 @@ export async function exportAll(state, onEach) {
   return names;
 }
 
-/** Test/screenshot hook: the exported PNG as a data URL, no download. */
+/** Test/screenshot hook: the exported PNG as a data URL, with no download. */
 export function exportDataURL(state, sizeId) {
   return renderToCanvas(state, sizeId).toDataURL('image/png');
 }

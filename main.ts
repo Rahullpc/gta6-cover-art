@@ -1,15 +1,18 @@
-// GTA 6 Cover Art v2 — multi-panel cover maker (gta6-cover-art-01), by Tedy.
+// GTA 6 Cover Art v3 — multi-panel cover maker + 4 samples (gta6-cover-art-01), by Tedy.
 // Vice Cover Studio turns 1-5 photos + a caption into a GTA-style comic cover and exports PNG
 // in three post sizes (1080x1080, 1080x1350, 1920x1080), fully offline in desktop Chrome.
-// v2 over v1: a face-safe framing engine (app/src/framing.js) keeps every face whole in every
-// panel (whole-or-absent, never half-cut), the comic borders are crisp and the layout tighter,
-// Neon Night is fully cold (no warm skin under the grade), and the control rail scrolls cleanly
-// at 1280x720 with a visible draggable thumb.
+// v3 over v2: two new bundled samples (porsche.jpg, summer.jpg) join boulevard + pier for four
+// total, each with a measured head box in the face-safe framing engine (app/src/framing.js) and
+// cast into the concept presets — summer headlines Sunset Beach Heist, porsche rides the tight
+// night/vignette panels at a zoom that keeps its small face readable. Every v2 guarantee holds:
+// faces whole-or-absent (never half-cut), crisp comic borders, fully cold Neon Night, and a
+// control rail that scrolls cleanly at 1280x720 with a visible draggable thumb.
 // A working gta6-cover-art-01 entry (Node 22, standard library only): the app is this directory's app/ folder, plain
 // static files a desktop browser loads offline (app/index.html and its ES modules, no library and no network
 // request), and the program hands it in. It copies app/ and screenshots/ from beside this file to /output and writes
-// /output/dossier.json, the summary the judge reads, with the vendored make.fun library. The two sample photos
-// (app/samples/) were made for make.fun with an image model and are free to use.
+// /output/dossier.json, the summary the judge reads, with the vendored make.fun library. The four sample photos
+// (app/samples/) are free to use: boulevard + pier were made for make.fun with an image model, and porsche +
+// summer are the boss's own photos, approved for bundling.
 //
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
