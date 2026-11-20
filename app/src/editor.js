@@ -1,4 +1,4 @@
-// editor.js — wires every control to the shared state (v3). Manages the photo
+// editor.js — wires every control to the shared state (v4). Manages the photo
 // roll (upload, drag-drop, the four samples), per-panel crop/zoom/drag, and the
 // live preview. The preview is the export render scaled to fit the stage, so it
 // is always identical to the PNG the export buttons write.
@@ -8,8 +8,9 @@
 // compact with a visible, draggable scrollbar so every section is reachable at
 // 720px, and selecting a panel scrolls its crop controls into view.
 //
-// v3 keeps the wiring identical and factors the repeated button/row building into
-// small helpers; the photo roll now carries four samples instead of two.
+// v4 keeps the wiring identical and routes every listener through small `on` /
+// `button` helpers, with the picker rows built from descriptor loops. Sunset
+// Hero now exposes five panels instead of six; everything else is unchanged.
 
 import { LAYOUTS, layoutById } from './layouts.js';
 import { GRADES, gradeById } from './grades.js';
@@ -20,12 +21,13 @@ import { renderCover } from './cover.js';
 import { exportPNG, exportAll } from './export.js';
 
 const $ = (id) => document.getElementById(id);
+const on = (id, ev, fn, opts) => $(id).addEventListener(ev, fn, opts);
 const STICKER_MAP = { stViceCity: 'viceCity', stLeonida: 'leonida', stStars: 'stars', stPalm: 'palm' };
 
 // Strip the samples/ prefix and extension for a friendly display name.
 const prettyName = (name) => name.replace(/^samples\//, '').replace(/\.[a-z]+$/i, '');
 
-// Build a button with a class, dataset keys and optional text/children.
+// Build a button with a class, dataset keys and optional text.
 function button(className, dataset, text) {
   const b = document.createElement('button');
   b.type = 'button';
@@ -204,25 +206,23 @@ export function initEditor(state) {
   }
 
   function setupPhotos() {
-    $('fileInput').addEventListener('change', (e) => {
+    on('fileInput', 'change', (e) => {
       addFiles(e.target.files);
       e.target.value = '';
     });
     const dropZone = $('dropZone');
-    ['dragenter', 'dragover'].forEach((ev) =>
-      dropZone.addEventListener(ev, (e) => {
-        e.preventDefault();
-        dropZone.classList.add('over');
-      }),
-    );
-    ['dragleave', 'drop'].forEach((ev) =>
-      dropZone.addEventListener(ev, (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('over');
-      }),
-    );
+    const over = (ev) => dropZone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      dropZone.classList.add('over');
+    });
+    const off = (ev) => dropZone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('over');
+    });
+    ['dragenter', 'dragover'].forEach(over);
+    ['dragleave', 'drop'].forEach(off);
     dropZone.addEventListener('drop', (e) => addFiles(e.dataTransfer.files));
-    $('samplesBtn').addEventListener('click', () => loadSamples());
+    on('samplesBtn', 'click', () => loadSamples());
   }
   setupPhotos();
 
@@ -254,8 +254,8 @@ export function initEditor(state) {
     g.addColorStop(1, '#2B0A4A');
     c.fillStyle = g;
     c.fillRect(0, 0, 56, 38);
-    c.strokeStyle = '#0D001A';
     c.lineWidth = 2;
+    c.strokeStyle = '#0D001A';
     for (const p of layout.panels(56, 38)) c.strokeRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
     return thumb;
   }
@@ -294,7 +294,7 @@ export function initEditor(state) {
     });
     gradeRow.appendChild(btn);
   }
-  $('gradeIntensity').addEventListener('input', (e) => {
+  on('gradeIntensity', 'input', (e) => {
     state.intensity = Number(e.target.value) / 100;
     $('gradeIntensityVal').textContent = `${e.target.value}%`;
     requestRender();
@@ -302,19 +302,19 @@ export function initEditor(state) {
 
   /* ------------------------------------------------------------ caption */
 
-  $('titleInput').addEventListener('input', (e) => {
+  on('titleInput', 'input', (e) => {
     state.title = e.target.value;
     requestRender();
   });
-  $('subInput').addEventListener('input', (e) => {
+  on('subInput', 'input', (e) => {
     state.subtitle = e.target.value;
     requestRender();
   });
-  $('titlePos').addEventListener('change', (e) => {
+  on('titlePos', 'change', (e) => {
     state.titlePos = e.target.value;
     requestRender();
   });
-  $('titleSize').addEventListener('input', (e) => {
+  on('titleSize', 'input', (e) => {
     state.titleScale = Number(e.target.value) / 100;
     $('titleSizeVal').textContent = `${e.target.value}%`;
     requestRender();
@@ -335,7 +335,7 @@ export function initEditor(state) {
   /* ----------------------------------------------------------- stickers */
 
   for (const [id, key] of Object.entries(STICKER_MAP)) {
-    $(id).addEventListener('change', (e) => {
+    on(id, 'change', (e) => {
       state.stickers[key] = e.target.checked;
       requestRender();
     });
@@ -377,20 +377,20 @@ export function initEditor(state) {
     requestRender();
   }
 
-  $('panelPhoto').addEventListener('change', (e) => {
+  on('panelPhoto', 'change', (e) => {
     const edit = activeEdits(state)[state.selectedPanel];
     if (!edit) return;
     edit.photo = Number(e.target.value);
     requestRender();
   });
-  $('panelZoom').addEventListener('input', (e) => {
+  on('panelZoom', 'input', (e) => {
     const edit = activeEdits(state)[state.selectedPanel];
     if (!edit) return;
     edit.zoom = Number(e.target.value) / 100;
     $('panelZoomVal').textContent = `${edit.zoom.toFixed(2)}×`;
     requestRender();
   });
-  $('panelReset').addEventListener('click', () => {
+  on('panelReset', 'click', () => {
     const edit = activeEdits(state)[state.selectedPanel];
     if (!edit) return;
     edit.zoom = 1;
@@ -490,7 +490,7 @@ export function initEditor(state) {
     exportRow.appendChild(btn);
   }
 
-  $('exportAll').addEventListener('click', async () => {
+  on('exportAll', 'click', async () => {
     setStatus('Exporting all three sizes…');
     const names = await exportAll(state, (name) => setStatus(`Saved ${name}`));
     setStatus(`Saved ${names.length} PNGs: ${names.join(', ')}`);
@@ -507,11 +507,14 @@ export function initEditor(state) {
     $('gradeIntensity').value = String(Math.round(state.intensity * 100));
     $('gradeIntensityVal').textContent = `${Math.round(state.intensity * 100)}%`;
     for (const [id, key] of Object.entries(STICKER_MAP)) $(id).checked = state.stickers[key];
-    for (const btn of presetRow.children) btn.classList.toggle('active', btn.dataset.preset === state.lastPreset);
-    for (const btn of layoutRow.children) btn.classList.toggle('active', btn.dataset.layout === state.layout);
-    for (const btn of gradeRow.children) btn.classList.toggle('active', btn.dataset.grade === state.grade);
-    for (const btn of colorRow.children) btn.classList.toggle('active', btn.dataset.color === state.titleColor);
-    for (const btn of sizeRow.children) btn.classList.toggle('active', btn.dataset.size === state.size);
+    const markActive = (row, attr, value) => {
+      for (const btn of row.children) btn.classList.toggle('active', btn.dataset[attr] === value);
+    };
+    markActive(presetRow, 'preset', state.lastPreset);
+    markActive(layoutRow, 'layout', state.layout);
+    markActive(gradeRow, 'grade', state.grade);
+    markActive(colorRow, 'color', state.titleColor);
+    markActive(sizeRow, 'size', state.size);
     refreshPanelControls();
   }
 

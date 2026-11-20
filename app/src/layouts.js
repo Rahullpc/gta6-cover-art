@@ -1,130 +1,137 @@
-// layouts.js — six comic-poster tilings (v3, geometry unchanged from v2).
+// layouts.js — poster tilings for Vice Cover Studio (v4).
 //
-// Rules the tilings keep:
-//   * panels tile the cover exactly — neighbours share edge coordinates, so
-//     there are no gaps and no overlaps;
-//   * 5-6 deliberately unequal panels, never an even grid;
-//   * slot 0 is the hero and owns ~40-50% of the area so the cover reads fast;
-//   * every panel carries a `scene` tag telling the renderer which vector action
-//     to ink over the graded photo;
-//   * borders stay straight and crisp — asymmetry comes from panel sizes.
+// Every tiling obeys the same contract: panels cover the sheet exactly (shared
+// edge coordinates, so no gaps and no overlaps), the hero slot owns roughly
+// half the area, and each panel carries a scene tag the renderer turns into
+// vector action. Borders stay straight; the asymmetry lives in panel sizes.
 //
-// The tilings are built from three combinators (a single slab, a weighted axis
-// split, and an uneven 2x2 block) so each layout reads as a short composition.
+// v4 change: the Sunset Hero bottom strip drops its car panel. The strip is now
+// beach + street only, with the old car share redistributed proportionally
+// (32:28 of the former 32+28), so the beach photo extends left into the space
+// the red car panel used to occupy. All other tilings are untouched.
+//
+// Building blocks: a panel record, a weighted axis run, an uneven 2x2 story
+// block, and a fraction-table helper for the fixed compositions.
 
 const isWide = (w, h) => w / h > 1.2;
 
-// One panel slab. `hero` marks the dominant face panel for the framing anchor.
-const slab = (slot, scene, x, y, w, h, hero = false) => ({ slot, scene, x, y, w, h, hero });
+function panel(slot, scene, x, y, w, h, hero) {
+  return { slot, scene, x, y, w, h, hero: !!hero };
+}
 
-// Split a rect along one axis by uneven weights; consecutive slabs share exact
-// edge coordinates, which is what keeps the tiling gap-free.
-function splitAxis(x, y, w, h, weights, scenes, axis, firstSlot) {
+// Fixed compositions are declared as fraction tables [slot, scene, fx, fy, fw,
+// fh, hero?] and scaled to the sheet here. Multiplying fraction-first keeps the
+// arithmetic commutative with the old width-first form.
+function fromFractions(specs, w, h) {
+  return specs.map(([slot, scene, fx, fy, fw, fh, hero]) =>
+    panel(slot, scene, fx * w, fy * h, fw * w, fh * h, hero));
+}
+
+// Weighted run along one axis. Spans are computed first, then laid end to end
+// from the rect's origin; consecutive panels share exact edge coordinates.
+function axisRun(rect, weights, scenes, axis, firstSlot) {
   const total = weights.reduce((a, b) => a + b, 0);
-  const out = [];
-  let cursor = axis === 'x' ? x : y;
-  weights.forEach((weight, i) => {
-    const span = ((axis === 'x' ? w : h) * weight) / total;
-    out.push(
-      axis === 'x'
-        ? slab(firstSlot + i, scenes[i], cursor, y, span, h)
-        : slab(firstSlot + i, scenes[i], x, cursor, w, span),
-    );
-    cursor += span;
+  const along = axis === 'x' ? rect.w : rect.h;
+  const spans = weights.map((wt) => (along * wt) / total);
+  const origin = axis === 'x' ? rect.x : rect.y;
+  const starts = spans.map((_, i) => spans.slice(0, i).reduce((a, b) => a + b, origin));
+  return scenes.map((scene, i) => {
+    const slot = firstSlot + i;
+    return axis === 'x'
+      ? panel(slot, scene, starts[i], rect.y, spans[i], rect.h)
+      : panel(slot, scene, rect.x, starts[i], rect.w, spans[i]);
   });
-  return out;
 }
 
-// An uneven 2x2 story block: unequal column widths AND row heights, so it never
-// reads as a plain grid. Slots run row-major from firstSlot.
-function quadBlock(x, y, w, h, scenes, firstSlot) {
-  const colW = [w * 0.56, w * 0.44];
-  const rowH = [h * 0.54, h * 0.46];
-  const out = [];
-  let yy = y;
-  for (let r = 0; r < 2; r++) {
-    let xx = x;
-    for (let c = 0; c < 2; c++) {
-      out.push(slab(firstSlot + r * 2 + c, scenes[r * 2 + c], xx, yy, colW[c], rowH[r]));
-      xx += colW[c];
-    }
-    yy += rowH[r];
+// Uneven 2x2 story block: unequal columns AND rows, row-major slot numbering.
+function storyQuad(x, y, w, h, scenes, firstSlot) {
+  const cols = [w * 0.56, w * 0.44];
+  const rows = [h * 0.54, h * 0.46];
+  const cells = [];
+  for (const r of [0, 1]) {
+    for (const c of [0, 1]) cells.push([r, c]);
   }
-  return out;
+  return cells.map(([r, c]) => {
+    const px = x + (c ? cols[0] : 0);
+    const py = y + (r ? rows[0] : 0);
+    return panel(firstSlot + r * 2 + c, scenes[r * 2 + c], px, py, cols[c], rows[r]);
+  });
 }
 
-// The bottom action strip shared by the hero layouts: car / beach / street.
-const actionStrip = (y, h, w, weights, firstSlot) =>
-  splitAxis(0, y, w, h, weights, ['car', 'beach', 'street'], 'x', firstSlot);
+// v4: the Sunset Hero action strip — beach then street, no car. Weights 32:28
+// are the old beach:street shares renormalised over the full width.
+const beachStreetStrip = (top, tall, w) =>
+  axisRun({ x: 0, y: top, w, h: tall }, [32, 28], ['beach', 'street'], 'x', 3);
+
+// The three-panel car/beach/street strip still used by the Cinema layout.
+const cinemaStrip = (top, tall, w) =>
+  axisRun({ x: 0, y: top, w, h: tall }, [44, 30, 26], ['car', 'beach', 'street'], 'x', 3);
 
 export const LAYOUTS = [
   {
     id: 'sunset-hero',
     name: 'Sunset Hero',
-    blurb: 'Big hero top-left, skyline + vignette right, a car / beach / street strip below.',
+    blurb: 'Dominant hero top-left, skyline and vignette on the right, beach + street strip below (v4: no car panel).',
     panels(w, h) {
       if (isWide(w, h)) {
-        return [
-          slab(0, 'hero', 0, 0, w * 0.64, h * 0.66, true),
-          slab(1, 'skyline', w * 0.64, 0, w * 0.36, h * 0.36),
-          slab(2, 'vignette', w * 0.64, h * 0.36, w * 0.36, h * 0.3),
-          ...actionStrip(h * 0.66, h * 0.34, w, [40, 32, 28], 3),
-        ];
+        const faces = fromFractions([
+          [0, 'hero', 0, 0, 0.64, 0.66, true],
+          [1, 'skyline', 0.64, 0, 0.36, 0.36],
+          [2, 'vignette', 0.64, 0.36, 0.36, 0.3],
+        ], w, h);
+        return [...faces, ...beachStreetStrip(h * 0.66, h * 0.34, w)];
       }
-      return [
-        slab(0, 'hero', 0, 0, w, h * 0.46, true),
-        slab(1, 'skyline', 0, h * 0.46, w * 0.56, h * 0.26),
-        slab(2, 'vignette', w * 0.56, h * 0.46, w * 0.44, h * 0.26),
-        ...actionStrip(h * 0.72, h * 0.28, w, [40, 32, 28], 3),
-      ];
+      const faces = fromFractions([
+        [0, 'hero', 0, 0, 1, 0.46, true],
+        [1, 'skyline', 0, 0.46, 0.56, 0.26],
+        [2, 'vignette', 0.56, 0.46, 0.44, 0.26],
+      ], w, h);
+      return [...faces, ...beachStreetStrip(h * 0.72, h * 0.28, w)];
     },
   },
   {
     id: 'grid-hero',
     name: 'Grid + Hero',
-    blurb: 'A tall hero beside an uneven 2x2 story block and a vignette footer.',
+    blurb: 'Tall hero beside an uneven 2x2 story block, vignette footer underneath.',
     panels(w, h) {
       if (isWide(w, h)) {
-        return [
-          slab(0, 'hero', w * 0.5, 0, w * 0.5, h, true),
-          ...quadBlock(0, 0, w * 0.5, h * 0.76, ['beach', 'street', 'skyline', 'car'], 1),
-          slab(5, 'vignette', 0, h * 0.76, w * 0.5, h * 0.24),
-        ];
+        const hero = panel(0, 'hero', w * 0.5, 0, w * 0.5, h, true);
+        const block = storyQuad(0, 0, w * 0.5, h * 0.76, ['beach', 'street', 'skyline', 'car'], 1);
+        const footer = panel(5, 'vignette', 0, h * 0.76, w * 0.5, h * 0.24);
+        return [hero, ...block, footer];
       }
-      return [
-        slab(0, 'hero', 0, 0, w, h * 0.44, true),
-        ...quadBlock(0, h * 0.44, w, h * 0.38, ['skyline', 'beach', 'street', 'vignette'], 1),
-        slab(5, 'car', 0, h * 0.82, w, h * 0.18),
-      ];
+      const hero = panel(0, 'hero', 0, 0, w, h * 0.44, true);
+      const block = storyQuad(0, h * 0.44, w, h * 0.38, ['skyline', 'beach', 'street', 'vignette'], 1);
+      const footer = panel(5, 'car', 0, h * 0.82, w, h * 0.18);
+      return [hero, ...block, footer];
     },
   },
   {
     id: 'five-vert',
     name: 'Vice Strip',
-    blurb: 'Five unequal slices, one moment each — the classic strip cover.',
+    blurb: 'Five unequal vertical slices, one moment each — the classic strip cover.',
     panels(w, h) {
-      // Five vertical columns of unequal width. Columns suit a portrait photo
-      // far better than short horizontal bands: the head fits cleanly and the
-      // car vignette stays small instead of towering over the face.
+      // Columns suit portrait photos: heads fit cleanly and the car vignette
+      // stays compact instead of towering over a face.
       const scenes = ['beach', 'car', 'hero', 'street', 'skyline'];
-      return splitAxis(0, 0, w, h, [22, 16, 30, 18, 14], scenes, 'x', 0).map((p, i) =>
-        i === 2 ? { ...p, hero: true } : p,
-      );
+      const columns = axisRun({ x: 0, y: 0, w, h }, [22, 16, 30, 18, 14], scenes, 'x', 0);
+      columns[2].hero = true;
+      return columns;
     },
   },
   {
     id: 'triptych',
     name: 'Triptych',
-    blurb: 'A wide hero framed by two tall sides split in two, plus a footer.',
+    blurb: 'Wide central hero framed by two tall sides split in two, plus a footer.',
     panels(w, h) {
-      return [
-        slab(0, 'hero', w * 0.26, 0, w * 0.48, h * 0.8, true),
-        slab(1, 'skyline', 0, 0, w * 0.26, h * 0.52),
-        slab(2, 'car', 0, h * 0.52, w * 0.26, h * 0.48),
-        slab(3, 'beach', w * 0.74, 0, w * 0.26, h * 0.52),
-        slab(4, 'street', w * 0.74, h * 0.52, w * 0.26, h * 0.48),
-        slab(5, 'vignette', w * 0.26, h * 0.8, w * 0.48, h * 0.2),
-      ];
+      return fromFractions([
+        [0, 'hero', 0.26, 0, 0.48, 0.8, true],
+        [1, 'skyline', 0, 0, 0.26, 0.52],
+        [2, 'car', 0, 0.52, 0.26, 0.48],
+        [3, 'beach', 0.74, 0, 0.26, 0.52],
+        [4, 'street', 0.74, 0.52, 0.26, 0.48],
+        [5, 'vignette', 0.26, 0.8, 0.48, 0.2],
+      ], w, h);
     },
   },
   {
@@ -132,41 +139,50 @@ export const LAYOUTS = [
     name: 'Comic Quad',
     blurb: 'A dominant hero corner with five unequal story panels around it.',
     panels(w, h) {
-      return [
-        slab(0, 'hero', 0, 0, w * 0.6, h * 0.66, true),
-        slab(1, 'skyline', w * 0.6, 0, w * 0.4, h * 0.34),
-        slab(2, 'street', w * 0.6, h * 0.34, w * 0.4, h * 0.32),
-        slab(3, 'car', 0, h * 0.66, w * 0.34, h * 0.34),
-        slab(4, 'vignette', w * 0.34, h * 0.66, w * 0.26, h * 0.34),
-        slab(5, 'beach', w * 0.6, h * 0.66, w * 0.4, h * 0.34),
-      ];
+      return fromFractions([
+        [0, 'hero', 0, 0, 0.6, 0.66, true],
+        [1, 'skyline', 0.6, 0, 0.4, 0.34],
+        [2, 'street', 0.6, 0.34, 0.4, 0.32],
+        [3, 'car', 0, 0.66, 0.34, 0.34],
+        [4, 'vignette', 0.34, 0.66, 0.26, 0.34],
+        [5, 'beach', 0.6, 0.66, 0.4, 0.34],
+      ], w, h);
     },
   },
   {
     id: 'cinema',
     name: 'Cinema Strip',
-    blurb: 'A widescreen hero between a top duo and a bottom trio of stills.',
+    blurb: 'Widescreen hero between a top duo and a bottom trio of stills.',
     panels(w, h) {
-      return [
-        slab(0, 'hero', 0, h * 0.26, w, h * 0.5, true),
-        slab(1, 'skyline', 0, 0, w * 0.62, h * 0.26),
-        slab(2, 'vignette', w * 0.62, 0, w * 0.38, h * 0.26),
-        ...actionStrip(h * 0.76, h * 0.24, w, [44, 30, 26], 3),
-      ];
+      const top = fromFractions([
+        [0, 'hero', 0, 0.26, 1, 0.5, true],
+        [1, 'skyline', 0, 0, 0.62, 0.26],
+        [2, 'vignette', 0.62, 0, 0.38, 0.26],
+      ], w, h);
+      return [...top, ...cinemaStrip(h * 0.76, h * 0.24, w)];
     },
   },
 ];
 
 export function layoutById(id) {
-  return LAYOUTS.find((l) => l.id === id) ?? LAYOUTS[0];
+  for (const layout of LAYOUTS) {
+    if (layout.id === id) return layout;
+  }
+  return LAYOUTS[0];
 }
 
 /**
  * Fresh crops for a layout: photos round-robin by slot, zoom 1, centred pan.
  * Face-safe by construction — computeFrame() protects the head even at zoom 1,
- * so switching to a brand-new layout never opens on a cut face.
+ * so switching to a brand-new layout never opens on a cut face. The panel count
+ * comes from the tiling itself, so it always matches the layout (v4: Sunset
+ * Hero yields five crops, not six).
  */
 export function defaultEdits(layout, photoCount) {
   const n = Math.max(1, photoCount);
-  return layout.panels(1000, 1000).map((p) => ({ photo: p.slot % n, zoom: 1, panX: 0, panY: 0 }));
+  const fresh = [];
+  for (const p of layout.panels(1000, 1000)) {
+    fresh.push({ photo: p.slot % n, zoom: 1, panX: 0, panY: 0 });
+  }
+  return fresh;
 }

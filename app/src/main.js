@@ -1,7 +1,8 @@
-// main.js — boot Vice Cover Studio v3: create the state, wire the editor, wait
-// for the bundled display font, then either run a ?shot= screenshot scene or load
-// the four sample photos with the default concept so the first paint is a full,
-// face-safe cover.
+// main.js — boot Vice Cover Studio v4: create the state, wire the editor, wait
+// for the bundled display font, then either run a ?shot= screenshot scene or
+// load the four sample photos with the default concept so the first paint is a
+// full, face-safe cover (now five panels on Sunset Hero — the red car panel is
+// gone and the beach photo extends left).
 
 import { createState, applyPreset, presetById, PRESETS, activeEdits } from './state.js';
 import { initEditor } from './editor.js';
@@ -34,8 +35,8 @@ if (params.get('shot')) {
   editor.setStatus('4 sample photos + Sunset Beach Heist loaded. Upload your own, or hit a concept.');
 }
 
-// Test hook: the live state, the exact export render path, and the framing engine
-// so an automated check can verify every panel keeps faces whole.
+// Test hook: the live state, the exact export render path, and the framing
+// engine so an automated check can verify every panel keeps faces whole.
 window.__viceCover = {
   state, editor, renderToCanvas, exportDataURL,
   computeFrame, focusOf, faceStatus,

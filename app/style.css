@@ -1,8 +1,9 @@
-/* Vice Cover Studio v3 — dark studio theme. The control rail stays compact and
+/* Vice Cover Studio v4 — dark studio theme. The control rail stays compact and
    legible at 1280x720. A bright, always-visible, draggable scroll thumb replaces
    the native overlay scrollbar (which disappears in headless shots); sections
-   are tightly spaced and the crop section auto-scrolls into view when a panel is
-   picked, so sections 4-7 stay reachable on a short viewport. */
+   are tightly spaced and the crop section auto-scrolls into view when a panel
+   is picked, so sections 4-7 stay reachable on a short viewport. Values match
+   v3 so the editor looks identical; only the Sunset Hero cover art changed. */
 
 /* Bundled OFL display face — loaded from app/fonts, never from the network. */
 @font-face {
@@ -24,6 +25,7 @@
   --gold: #FFD60A;
 }
 
+/* Base layout: full-height column, brand bar on top, rail + stage below. */
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
@@ -34,6 +36,7 @@ body {
   flex-direction: column;
   overflow: hidden;
 }
+.app { flex: 1; display: flex; min-height: 0; }
 
 /* Top brand bar. */
 .topbar {
@@ -56,8 +59,6 @@ body {
   color: transparent;
 }
 .topbar .tag { margin: 0; color: var(--muted); font-size: 12px; }
-
-.app { flex: 1; display: flex; min-height: 0; }
 
 /* Left control rail: a scrollable column of sections plus a pinned export box. */
 .rail {
@@ -83,6 +84,7 @@ body {
   scrollbar-width: none;
 }
 .rail-scroll::-webkit-scrollbar { display: none; }
+
 /* Custom scroll track + thumb: high-contrast so it reads in screenshots, and
    draggable so every section is reachable even on a short 720px viewport. */
 .rail-track {
@@ -107,6 +109,7 @@ body {
 }
 .rail-thumb:active { cursor: grabbing; }
 
+/* Rail sections + headings. */
 .rail section {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -141,10 +144,10 @@ input[type=text]:focus, select:focus { outline: 1px solid var(--pink); }
 .row > label { flex: 1; }
 .row > .mini-label { flex: none; }
 .row > .size-row { flex: 1; }
-
 .slider span { color: var(--gold); font-weight: 700; }
 input[type=range] { width: 100%; accent-color: var(--pink); margin: 1px 0 0; }
 
+/* Buttons. */
 button {
   font: inherit;
   font-weight: 700;
@@ -195,7 +198,7 @@ button.primary {
 .thumbs span { max-width: 62px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
 .thumb-del { padding: 0 5px; font-size: 13px; line-height: 1; }
 
-/* Concept / layout / grade pickers. */
+/* Concept / layout / grade / colour pickers. */
 .preset-row { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .preset-btn { font-size: 11.5px; padding: 6px 5px; }
 .layout-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }

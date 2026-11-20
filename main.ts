@@ -1,12 +1,15 @@
-// GTA 6 Cover Art v3 — multi-panel cover maker + 4 samples (gta6-cover-art-01), by Tedy.
+// GTA 6 Cover Art v4 — multi-panel cover maker + 4 samples (gta6-cover-art-01), by Tedy.
 // Vice Cover Studio turns 1-5 photos + a caption into a GTA-style comic cover and exports PNG
 // in three post sizes (1080x1080, 1080x1350, 1920x1080), fully offline in desktop Chrome.
-// v3 over v2: two new bundled samples (porsche.jpg, summer.jpg) join boulevard + pier for four
-// total, each with a measured head box in the face-safe framing engine (app/src/framing.js) and
-// cast into the concept presets — summer headlines Sunset Beach Heist, porsche rides the tight
-// night/vignette panels at a zoom that keeps its small face readable. Every v2 guarantee holds:
-// faces whole-or-absent (never half-cut), crisp comic borders, fully cold Neon Night, and a
-// control rail that scrolls cleanly at 1280x720 with a visible draggable thumb.
+// v4 over v3: one art-direction fix — the Sunset Beach Heist cover (sunset-hero layout) drops
+// its red car panel + black car silhouette from the bottom strip. The strip is now beach +
+// street with the old car share redistributed proportionally (32:28), so the beach photo
+// extends left into the freed space; the preset's crop list remaps 6 -> 5 slots and the crop
+// cache regenerates stale lists. Every other layout keeps its car panel, and all v3 guarantees
+// hold: four bundled samples (boulevard, pier, porsche, summer) with measured head boxes in the
+// face-safe framing engine (app/src/framing.js), faces whole-or-absent (never half-cut), crisp
+// comic borders, fully cold Neon Night, and a control rail that scrolls cleanly at 1280x720
+// with a visible draggable thumb.
 // A working gta6-cover-art-01 entry (Node 22, standard library only): the app is this directory's app/ folder, plain
 // static files a desktop browser loads offline (app/index.html and its ES modules, no library and no network
 // request), and the program hands it in. It copies app/ and screenshots/ from beside this file to /output and writes

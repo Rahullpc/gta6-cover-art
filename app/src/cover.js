@@ -1,5 +1,6 @@
-// cover.js — the ONE renderer behind both the live preview and the PNG export (v3).
-// Same canvas calls, same seeded decor, so what you see is exactly what you get.
+// cover.js — the ONE renderer behind both the live preview and the PNG export
+// (v4). Same canvas calls, same seeded decor, so what you see is exactly what
+// you get.
 //
 // Pipeline: panels (face-safe photo via framing.js + bold grade + scene action +
 // halftone) -> crisp comic borders -> foreground palms -> grain -> stickers ->
@@ -7,8 +8,9 @@
 // engine guarantees a face is whole or absent in every panel; the renderer just
 // draws the frame it returns.
 //
-// v3 keeps the pipeline identical and lifts the per-panel work into its own pass
-// so the top-level render reads as a short sequence of whole-cover layers.
+// v4: the Sunset Hero tiling no longer has a car panel, so its bottom strip
+// renders beach + street only. The car scene art below is unchanged and still
+// serves every other layout that carries a car slot.
 
 import { layoutById } from './layouts.js';
 import { gradeById, paintGrade } from './grades.js';
@@ -45,52 +47,68 @@ function drawPanelPhoto(ctx, img, p, frame) {
   }
   const dw = img.naturalWidth * frame.scale;
   const dh = img.naturalHeight * frame.scale;
-  ctx.drawImage(img, p.x - frame.left * frame.scale, p.y - frame.top * frame.scale, dw, dh);
+  const dx = p.x - frame.left * frame.scale;
+  const dy = p.y - frame.top * frame.scale;
+  ctx.drawImage(img, dx, dy, dw, dh);
 }
 
-// The vector action inked over a panel's graded photo, by scene tag. Faces sit in
-// the upper third (see framing.js), so scene action is pinned to the top corners
-// and the lower half — never across the face itself.
+// The vector action inked over a panel's graded photo, by scene tag. Faces sit
+// in the upper third (see framing.js), so scene action is pinned to the top
+// corners and the lower half — never across the face itself. Each handler is a
+// named function; the dispatch table maps scene tags to them.
+
+function heroArt(ctx, p, idx, night, m, seed) {
+  if (night) {
+    drawMoon(ctx, p.x + p.w * 0.86, p.y + p.h * 0.14, m * 0.1);
+    drawStars(ctx, p.x + p.w * 0.05, p.y + p.h * 0.03, p.w * 0.9, p.h * 0.16, 10, seed);
+  } else {
+    drawSun(ctx, p.x + p.w * 0.87, p.y + p.h * 0.14, m * 0.18, 0.9);
+    drawBirds(ctx, p.x + p.w * 0.05, p.y + p.h * 0.04, p.w * 0.3, p.h * 0.12, 4, seed);
+  }
+  drawPalm(ctx, p.x + p.w * 0.03, p.y + p.h * 0.995, p.h * 0.4, 0.1);
+  drawMoney(ctx, p.x + p.w * 0.66, p.y + p.h * 0.86, p.w * 0.3, p.h * 0.12, 2, seed + 1);
+}
+
+function skylineArt(ctx, p, idx, night, m, seed) {
+  if (night) {
+    drawStars(ctx, p.x + p.w * 0.05, p.y + p.h * 0.03, p.w * 0.9, p.h * 0.18, 7, seed + 4);
+    drawSkyline(ctx, p.x, p.y + p.h * 0.56, p.w, p.h * 0.44, seed);
+  } else {
+    drawSun(ctx, p.x + p.w * 0.84, p.y + p.h * 0.12, m * 0.13, 0.85);
+    drawSkyline(ctx, p.x, p.y + p.h * 0.58, p.w, p.h * 0.42, seed);
+    drawBirds(ctx, p.x + p.w * 0.4, p.y + p.h * 0.05, p.w * 0.4, p.h * 0.12, 3, seed + 2);
+    drawPlane(ctx, p.x + p.w * 0.66, p.y + p.h * 0.12, m * 0.1);
+  }
+}
+
+function carArt(ctx, p) {
+  // Keep the car inside the panel: its height is 0.3*width, so cap the width on
+  // short panels so it never towers over (and covers) the face.
+  const carW = Math.min(p.w * 0.84, (p.h * 0.82) / 0.3);
+  const carX = p.x + (p.w - carW) / 2;
+  const carY = p.y + p.h - carW * 0.3 - p.h * 0.06;
+  drawCar(ctx, carX, carY, carW, '#00E5FF', -0.03);
+}
+
+function beachArt(ctx, p, idx, night, m, seed) {
+  drawBeachScene(ctx, p.x, p.y, p.w, p.h, seed, night);
+}
+
+function streetArt(ctx, p, idx, night, m, seed) {
+  drawStreetScene(ctx, p.x, p.y, p.w, p.h, seed);
+}
+
+function vignetteArt(ctx, p, idx, night, m, seed) {
+  drawVignette(ctx, p.x, p.y, p.w, p.h, idx % 4, seed);
+}
+
 const SCENE_ART = {
-  hero(ctx, p, idx, night, m, seed) {
-    if (night) {
-      drawMoon(ctx, p.x + p.w * 0.86, p.y + p.h * 0.14, m * 0.1);
-      drawStars(ctx, p.x + p.w * 0.05, p.y + p.h * 0.03, p.w * 0.9, p.h * 0.16, 10, seed);
-    } else {
-      drawSun(ctx, p.x + p.w * 0.87, p.y + p.h * 0.14, m * 0.18, 0.9);
-      drawBirds(ctx, p.x + p.w * 0.05, p.y + p.h * 0.04, p.w * 0.3, p.h * 0.12, 4, seed);
-    }
-    drawPalm(ctx, p.x + p.w * 0.03, p.y + p.h * 0.995, p.h * 0.4, 0.1);
-    drawMoney(ctx, p.x + p.w * 0.66, p.y + p.h * 0.86, p.w * 0.3, p.h * 0.12, 2, seed + 1);
-  },
-  skyline(ctx, p, idx, night, m, seed) {
-    if (night) {
-      drawStars(ctx, p.x + p.w * 0.05, p.y + p.h * 0.03, p.w * 0.9, p.h * 0.18, 7, seed + 4);
-      drawSkyline(ctx, p.x, p.y + p.h * 0.56, p.w, p.h * 0.44, seed);
-    } else {
-      drawSun(ctx, p.x + p.w * 0.84, p.y + p.h * 0.12, m * 0.13, 0.85);
-      drawSkyline(ctx, p.x, p.y + p.h * 0.58, p.w, p.h * 0.42, seed);
-      drawBirds(ctx, p.x + p.w * 0.4, p.y + p.h * 0.05, p.w * 0.4, p.h * 0.12, 3, seed + 2);
-      drawPlane(ctx, p.x + p.w * 0.66, p.y + p.h * 0.12, m * 0.1);
-    }
-  },
-  car(ctx, p) {
-    // Keep the car inside the panel: its height is 0.3*width, so cap the width on
-    // short panels so it never towers over (and covers) the face.
-    const carW = Math.min(p.w * 0.84, (p.h * 0.82) / 0.3);
-    const carX = p.x + (p.w - carW) / 2;
-    const carY = p.y + p.h - carW * 0.3 - p.h * 0.06;
-    drawCar(ctx, carX, carY, carW, '#00E5FF', -0.03);
-  },
-  beach(ctx, p, idx, night, m, seed) {
-    drawBeachScene(ctx, p.x, p.y, p.w, p.h, seed, night);
-  },
-  street(ctx, p, idx, night, m, seed) {
-    drawStreetScene(ctx, p.x, p.y, p.w, p.h, seed);
-  },
-  vignette(ctx, p, idx, night, m, seed) {
-    drawVignette(ctx, p.x, p.y, p.w, p.h, idx % 4, seed);
-  },
+  hero: heroArt,
+  skyline: skylineArt,
+  car: carArt,
+  beach: beachArt,
+  street: streetArt,
+  vignette: vignetteArt,
 };
 
 function sceneDecor(ctx, p, idx, night) {
@@ -126,8 +144,8 @@ function paintPanels(ctx, panels, edits, photos, grade, k, night) {
 // Dashed cyan outline + a small label chip on the selected panel (editor only).
 function drawSelection(ctx, p, idx, s) {
   ctx.save();
-  ctx.strokeStyle = '#00E5FF';
   ctx.lineWidth = Math.max(2, s * 0.004);
+  ctx.strokeStyle = '#00E5FF';
   ctx.setLineDash([s * 0.02, s * 0.012]);
   ctx.strokeRect(p.x + 2, p.y + 2, p.w - 4, p.h - 4);
   ctx.setLineDash([]);
@@ -136,11 +154,19 @@ function drawSelection(ctx, p, idx, s) {
   const tw = ctx.measureText(label).width;
   ctx.fillStyle = 'rgba(13,0,26,0.85)';
   ctx.fillRect(p.x + 6, p.y + 6, tw + 20, s * 0.04);
-  ctx.fillStyle = '#00E5FF';
   ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#00E5FF';
   ctx.fillText(label, p.x + 16, p.y + 6 + s * 0.02);
   ctx.restore();
 }
+
+// Sticker dispatch, painted in the v3 order.
+const STICKER_PAINT = {
+  viceCity: stickerViceCity,
+  leonida: stickerLeonida,
+  stars: stickerStars,
+  palm: stickerPalm,
+};
 
 /**
  * Render the whole cover into ctx at w x h pixels.
@@ -171,14 +197,15 @@ export function renderCover(ctx, state, w, h, opts = {}) {
   // Film grain over everything.
   drawGrain(ctx, w, h);
   // Stickers.
-  if (state.stickers.viceCity) stickerViceCity(ctx, w, h);
-  if (state.stickers.leonida) stickerLeonida(ctx, w, h);
-  if (state.stickers.stars) stickerStars(ctx, w, h);
-  if (state.stickers.palm) stickerPalm(ctx, w, h);
+  for (const [key, paint] of Object.entries(STICKER_PAINT)) {
+    if (state.stickers[key]) paint(ctx, w, h);
+  }
   // Giant caption lettering on top, bleeding across panel edges.
   drawCaption(ctx, state, w, h);
   // Editor-only selection highlight (never exported).
-  if (opts.selection >= 0 && panels[opts.selection]) drawSelection(ctx, panels[opts.selection], opts.selection, s);
+  if (opts.selection >= 0 && panels[opts.selection]) {
+    drawSelection(ctx, panels[opts.selection], opts.selection, s);
+  }
   ctx.restore();
 }
 

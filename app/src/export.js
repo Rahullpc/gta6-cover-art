@@ -1,4 +1,4 @@
-// export.js — PNG export (v3). Render the cover at a post size on a fresh canvas
+// export.js — PNG export (v4). Render the cover at a post size on a fresh canvas
 // and hand it to the browser as a download. The very same renderCover() call
 // paints the live preview, so the saved file matches the editor pixel for pixel.
 
@@ -29,7 +29,8 @@ function downloadCanvas(canvas, name) {
 
 /** Render + download one PNG. Resolves with the filename once saved. */
 export function exportPNG(state, sizeId) {
-  return downloadCanvas(renderToCanvas(state, sizeId), fileNameFor(sizeById(sizeId)));
+  const canvas = renderToCanvas(state, sizeId);
+  return downloadCanvas(canvas, fileNameFor(sizeById(sizeId)));
 }
 
 /** Download all three post sizes, one after another, reporting each. */
