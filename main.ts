@@ -1,55 +1,42 @@
-// GTA 6 Cover Art v7 — multi-panel cover maker + 4 samples (gta6-cover-art-01), by Tedy.
-// Vice Cover Studio turns 1-5 photos + a caption into a GTA-style comic cover and exports PNG
-// in three post sizes (1080x1080, 1080x1350, 1920x1080), fully offline in desktop Chrome.
-// v6 over v5: one art-direction fix, by order of the boss — the row of black skyline buildings
-// is removed from every cover. The drawSkyline painter and its tower helpers are deleted from
-// app/src/decor.js and both call sites (night + day) are gone from skylineArt in app/src/cover.js,
-// so every layout's skyline panel now shows only its graded face-safe photo plus the remaining
-// sky art (night: sparkles; day: birds + plane) — no replacement element, no gap. All v5
-// guarantees hold: the wanted-level sticker is a full FIVE gold stars in a neat row below the
-// VICE CITY badge (the badge's own small pink star and the LEONIDA star are logo parts, not
-// wanted stars), no retro striped synthwave sun in any day-grade sky, and the Neon Night moon is
-// untouched. Vice Strip keeps stars:false; golden-duo shares the five-star row and the sun-free
-// sky, consistently. All v4 guarantees hold: the Sunset Hero strip is beach + street (no car
-// panel), four bundled samples (boulevard, pier, porsche, summer) with measured head boxes in the
-// face-safe framing engine (app/src/framing.js), faces whole-or-absent (never half-cut), crisp
-// comic borders, fully cold Neon Night, and a control rail that scrolls cleanly at 1280x720 with
-// a visible draggable thumb.
-// A working gta6-cover-art-01 entry (Node 22, standard library only): the app is this directory's app/ folder, plain
-// static files a desktop browser loads offline (app/index.html and its ES modules, no library and no network
-// request), and the program hands it in. It copies app/ and screenshots/ from beside this file to /output and writes
-// /output/dossier.json, the summary the judge reads, with the vendored make.fun library. The four sample photos
-// (app/samples/) are free to use: boulevard + pier were made for make.fun with an image model, and porsche +
-// summer are the boss's own photos, approved for bundling.
-//
-// Serve it locally with `node serve.ts`, then open http://localhost:8080.
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
-
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+// main.ts — entrypoint (Node 22, standard library only).
+// Copies app/ and screenshots/ beside this file into the output directory
+// (OUTPUT_DIR, else MAKEFUN_OUTPUT_DIR outside the grader, else /output)
+// and writes output/dossier.json with the vendored make.fun library.
+import { cpSync, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-app.ts';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const here = dirname(fileURLToPath(import.meta.url));
+const out = resolve(process.env.OUTPUT_DIR || process.env.MAKEFUN_OUTPUT_DIR || '/output');
+
+// Pre-flight: the dossier must never claim success over missing or
+// oversized screenshots. A broken render once produced 50 KB placeholder
+// shots with no error; fail loudly here instead of shipping those.
+if (!existsSync(join(here, 'app'))) throw new Error('app/ missing — nothing to submit');
+const shotsDir = join(here, 'screenshots');
+if (!existsSync(shotsDir)) throw new Error('screenshots/ missing — run the shot script first');
+for (const name of ['1-cover.jpg', '2-editor.jpg', '3-cover.jpg', '4-cover.jpg']) {
+  const p = join(shotsDir, name);
+  if (!existsSync(p)) throw new Error(`screenshot ${name} missing — run the shot script first`);
+  const size = statSync(p).size;
+  if (size > 262144) throw new Error(`screenshot ${name} is ${size} bytes, over the 262144 limit`);
+}
 
 mkdirSync(out, { recursive: true });
-cpSync(join(here, 'app'), join(out, 'app'), { recursive: true });
-mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+for (const name of ['app', 'screenshots']) {
+  const src = join(here, name);
+  const dst = join(out, name);
+  rmSync(dst, { recursive: true, force: true });
+  if (existsSync(src)) cpSync(src, dst, { recursive: true });
+}
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
-// scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in app/ or 48 MiB of app
-// files, in all, or a path under app/ over 1000 bytes: app/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json).
-writeFileSync(
-  join(out, 'dossier.json'),
-  buildDossier(out, {
-    text_max_bytes: 163840,
-    screenshots: { max: 4, max_bytes: 262144 },
-    app_max_files: 993,
-    app_max_bytes: 50331648,
-    app_path_max_bytes: 1000,
-  }),
-);
+const dossier = buildDossier(out, {
+  text_max_bytes: 163840,
+  screenshots: { max: 4, max_bytes: 262144 },
+  app_max_files: 993,
+  app_max_bytes: 50331648,
+  app_path_max_bytes: 1000,
+});
+writeFileSync(join(out, 'dossier.json'), dossier);
+console.log(`dossier written to ${join(out, 'dossier.json')}`);

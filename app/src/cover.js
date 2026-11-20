@@ -1,224 +1,234 @@
-// cover.js — the single renderer behind the live preview AND the PNG export
-// (v6). One code path, one set of seeded canvas calls: what the editor shows is
-// exactly what the export writes.
-//
-// Pipeline: panels (face-safe photo via framing.js + bold grade + scene action
-// + halftone) -> crisp comic borders -> foreground palms -> grain -> stickers
-// -> giant caption lettering -> (editor-only) selection highlight. The framing
-// engine guarantees each panel shows a whole face or none; this renderer just
-// draws the frame it is handed.
-//
-// v6 art direction: the black city-skyline silhouette is gone from every
-// cover. skylineArt no longer calls any tower painter — a skyline panel keeps
-// its graded face-safe photo plus the remaining sky art (night: sparkles;
-// day: birds and the prop plane), and the area below the face simply shows the
-// photo/grade underneath. No replacement element was added. The v5 direction
-// holds: no retro synthwave sun in any day sky, the night moon untouched, and
-// the five-star wanted row under the VICE CITY badge. The v4 change holds too:
-// Sunset Hero's bottom strip is beach + street (no car panel), while the car
-// scene art still serves every layout that carries a car slot.
+// cover.js — the single renderer behind the live preview and the PNG
+// export. One code path for both, so the saved file matches the editor
+// pixel for pixel.
 
-import { layoutById } from './layouts.js';
-import { gradeById, paintGrade } from './grades.js';
-import { activeEdits, clamp, sizeById } from './state.js';
-import { computeFrame, focusOf } from './framing.js';
-import { drawCaption } from './lettering.js';
-import {
-  drawMoon, drawStars, drawPalm, drawBirds, drawPlane,
-  drawCar, drawBeachScene, drawStreetScene, drawVignette, drawMoney,
-  drawHalftone, drawPanelHalftone, drawGrain, drawPanelBorders,
-  stickerViceCity, stickerLeonida, stickerStars, stickerPalm, drawPlaceholder,
-} from './decor.js';
+import { layoutPanels, layoutById } from './layouts.js';
+import { gradeById, paintWash } from './grades.js';
+import { drawScene, halftonePanel, halftoneCorners, grain,
+         viceCityBadge, leonidaBadge, starsRow, palmBadge, drawPalm } from './decor.js';
+import { paintTitle } from './lettering.js';
+import { computeFrame, resolveFocus, classifyFrame } from './framing.js';
+import { cloneState, applyConcept } from './state.js';
 
-const DISPLAY_FONT = '"Vice Display", "Arial Black", sans-serif';
+export const SIZES = {
+  square: { id: 'square', name: 'Square', w: 1080, h: 1080 },
+  portrait: { id: 'portrait', name: 'Portrait', w: 1080, h: 1350 },
+  landscape: { id: 'landscape', name: 'Landscape', w: 1920, h: 1080 },
+};
 
-// Grades that read as night: their skies get a moon and sparkles, never a sun.
-const NIGHT_GRADES = new Set(['neon-night', 'teal-noir', 'ultraviolet']);
+function drawPlaceholder(ctx, panel) {
+  const { x, y, w, h } = panel;
+  const g = ctx.createLinearGradient(x, y, x + w, y + h);
+  g.addColorStop(0, '#3B0A5E'); g.addColorStop(1, '#FF2E88');
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, w, h);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.strokeStyle = 'rgba(0,229,255,0.25)';
+  ctx.lineWidth = Math.max(1, Math.min(w, h) * 0.01);
+  for (let i = -h; i < w; i += 26) {
+    ctx.beginPath(); ctx.moveTo(x + i, y + h); ctx.lineTo(x + i + h, y); ctx.stroke();
+  }
+  ctx.restore();
+  ctx.font = `900 ${Math.min(w, h) * 0.09}px 'Noto Sans Condensed Black', 'Arial Black', sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = Math.max(2, Math.min(w, h) * 0.012);
+  ctx.strokeStyle = '#0D001A';
+  ctx.strokeText('ADD PHOTO', x + w / 2, y + h / 2);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillText('ADD PHOTO', x + w / 2, y + h / 2);
+}
 
-// Draw a photo into a panel using its face-safe frame. A blur-fill panel first
-// gets a soft stretched copy of the photo so there are never bare gaps.
-function drawPanelPhoto(ctx, img, p, frame) {
-  if (frame.bg) {
-    ctx.save();
-    const blurPx = Math.max(6, Math.min(p.w, p.h) * 0.04);
-    ctx.filter = `blur(${blurPx}px) saturate(1.2) brightness(0.7)`;
-    const over = 1.12; // overscan so blurred edges never show transparency
-    const ox = p.x - (p.w * (over - 1)) / 2;
-    const oy = p.y - (p.h * (over - 1)) / 2;
-    ctx.drawImage(img, ox, oy, p.w * over, p.h * over);
+function drawPhoto(ctx, photo, panel, crop, grade, k) {
+  const { x, y, w, h } = panel;
+  const img = photo.img;
+  const focus = resolveFocus(photo);
+  const frame = computeFrame(img, { w, h, tag: panel.tag }, crop, focus);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  if (frame.mode === 'blur') {
+    // Soft stretched plate: blurred, slightly saturated, darkened,
+    // overscanned 12% so no transparent edges show.
+    ctx.filter = `blur(${Math.max(6, Math.min(w, h) * 0.02)}px) saturate(1.2) brightness(0.7)`;
+    ctx.drawImage(img, x - w * 0.06, y - h * 0.06, w * 1.12, h * 1.12);
     ctx.filter = 'none';
     ctx.fillStyle = 'rgba(13,0,26,0.35)';
-    ctx.fillRect(p.x, p.y, p.w, p.h);
-    ctx.restore();
-  }
-  const dw = img.naturalWidth * frame.scale;
-  const dh = img.naturalHeight * frame.scale;
-  const dx = p.x - frame.left * frame.scale;
-  const dy = p.y - frame.top * frame.scale;
-  ctx.drawImage(img, dx, dy, dw, dh);
-}
-
-// The vector action inked over a panel's graded photo, dispatched by scene tag.
-// Faces sit in the upper third (framing.js), so scene action pins to the top
-// corners and the lower half — never across the face itself. v6: skyline panels
-// carry only sky art (sparkles at night, birds + plane by day); the black tower
-// row is retired, so nothing is inked across the lower half of those panels.
-
-function heroArt(ctx, p, idx, night, m, seed) {
-  if (night) {
-    drawMoon(ctx, p.x + p.w * 0.86, p.y + p.h * 0.14, m * 0.1);
-    drawStars(ctx, p.x + p.w * 0.05, p.y + p.h * 0.03, p.w * 0.9, p.h * 0.16, 10, seed);
+    ctx.fillRect(x, y, w, h);
+    const sh = frame.sharp;
+    ctx.filter = grade.filter(k);
+    ctx.drawImage(img, x + sh.dx, y + sh.dy, sh.dw, sh.dh);
+    ctx.filter = 'none';
   } else {
-    drawBirds(ctx, p.x + p.w * 0.05, p.y + p.h * 0.04, p.w * 0.3, p.h * 0.12, 4, seed);
+    ctx.filter = grade.filter(k);
+    ctx.drawImage(img,
+      frame.sx * img.naturalWidth, frame.sy * img.naturalHeight,
+      frame.sw * img.naturalWidth, frame.sh * img.naturalHeight,
+      x, y, w, h);
+    ctx.filter = 'none';
   }
-  drawPalm(ctx, p.x + p.w * 0.03, p.y + p.h * 0.995, p.h * 0.4, 0.1);
-  drawMoney(ctx, p.x + p.w * 0.66, p.y + p.h * 0.86, p.w * 0.3, p.h * 0.12, 2, seed + 1);
-}
-
-function skylineArt(ctx, p, idx, night, m, seed) {
-  if (night) {
-    drawStars(ctx, p.x + p.w * 0.05, p.y + p.h * 0.03, p.w * 0.9, p.h * 0.18, 7, seed + 4);
-  } else {
-    drawBirds(ctx, p.x + p.w * 0.4, p.y + p.h * 0.05, p.w * 0.4, p.h * 0.12, 3, seed + 2);
-    drawPlane(ctx, p.x + p.w * 0.66, p.y + p.h * 0.12, m * 0.1);
-  }
-}
-
-function carArt(ctx, p) {
-  // Keep the car inside the panel: its height is 0.3*width, so cap the width on
-  // short panels so it never towers over (and covers) the face.
-  const carW = Math.min(p.w * 0.84, (p.h * 0.82) / 0.3);
-  const carX = p.x + (p.w - carW) / 2;
-  const carY = p.y + p.h - carW * 0.3 - p.h * 0.06;
-  drawCar(ctx, carX, carY, carW, '#00E5FF', -0.03);
-}
-
-function beachArt(ctx, p, idx, night, m, seed) {
-  drawBeachScene(ctx, p.x, p.y, p.w, p.h, seed, night);
-}
-
-function streetArt(ctx, p, idx, night, m, seed) {
-  drawStreetScene(ctx, p.x, p.y, p.w, p.h, seed);
-}
-
-function vignetteArt(ctx, p, idx, night, m, seed) {
-  drawVignette(ctx, p.x, p.y, p.w, p.h, idx % 4, seed);
-}
-
-const SCENE_ART = {
-  hero: heroArt,
-  skyline: skylineArt,
-  car: carArt,
-  beach: beachArt,
-  street: streetArt,
-  vignette: vignetteArt,
-};
-
-function sceneDecor(ctx, p, idx, night) {
-  const handler = SCENE_ART[p.scene];
-  if (handler) handler(ctx, p, idx, night, Math.min(p.w, p.h), 1000 + idx * 77);
-}
-
-// Pass 1 — every panel: face-safe photo (or patterned placeholder), bold grade,
-// scene action, halftone. Each panel is clipped to its own rect.
-function paintPanels(ctx, panels, edits, photos, grade, k, night) {
-  panels.forEach((p, i) => {
-    const edit = edits[i] ?? { photo: 0, zoom: 1, panX: 0, panY: 0 };
-    const photo = photos.length ? photos[edit.photo % photos.length] : null;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(p.x, p.y, p.w, p.h);
-    ctx.clip();
-    if (photo) {
-      const frame = computeFrame(photo.img, p, edit, focusOf(photo));
-      ctx.filter = grade.filter(k);
-      drawPanelPhoto(ctx, photo.img, p, frame);
-      ctx.filter = 'none';
-    } else {
-      drawPlaceholder(ctx, p.x, p.y, p.w, p.h);
-    }
-    paintGrade(ctx, p.x, p.y, p.w, p.h, grade, k);
-    sceneDecor(ctx, p, i, night);
-    drawPanelHalftone(ctx, p, 500 + i * 31);
-    ctx.restore();
-  });
-}
-
-// Dashed cyan outline + a small label chip on the selected panel (editor only).
-function drawSelection(ctx, p, idx, s) {
-  ctx.save();
-  ctx.lineWidth = Math.max(2, s * 0.004);
-  ctx.strokeStyle = '#00E5FF';
-  ctx.setLineDash([s * 0.02, s * 0.012]);
-  ctx.strokeRect(p.x + 2, p.y + 2, p.w - 4, p.h - 4);
-  ctx.setLineDash([]);
-  const label = `PANEL ${idx + 1}`;
-  ctx.font = `900 ${Math.max(14, s * 0.024)}px ${DISPLAY_FONT}`;
-  const tw = ctx.measureText(label).width;
-  ctx.fillStyle = 'rgba(13,0,26,0.85)';
-  ctx.fillRect(p.x + 6, p.y + 6, tw + 20, s * 0.04);
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#00E5FF';
-  ctx.fillText(label, p.x + 16, p.y + 6 + s * 0.02);
   ctx.restore();
+  return frame;
 }
 
-// Sticker dispatch, painted in the established order. v5: `stars` now paints
-// the five-star wanted row (decor.js); the badge logos are unchanged.
-const STICKER_PAINT = {
-  viceCity: stickerViceCity,
-  leonida: stickerLeonida,
-  stars: stickerStars,
-  palm: stickerPalm,
-};
-
-/**
- * Render the whole cover into ctx at w x h pixels.
- * opts.selection (panel index) draws the editor highlight; exports omit it.
- */
-export function renderCover(ctx, state, w, h, opts = {}) {
+export function renderCover(ctx, state, W, H, opts = {}) {
+  const size = SIZES[state.size] || SIZES.landscape;
   const layout = layoutById(state.layout);
+  const panels = layoutPanels(layout, W, H);
   const grade = gradeById(state.grade);
-  const k = clamp(state.intensity ?? 0.9, 0, 1);
-  const panels = layout.panels(w, h);
-  const edits = activeEdits(state);
-  const s = Math.min(w, h);
-  const night = NIGHT_GRADES.has(state.grade);
+  const k = state.intensity ?? 0.92;
+  const crops = state.cropsFor(state.layout);
+  const seed = 1234;
 
-  ctx.save();
-  ctx.clearRect(0, 0, w, h);
+  ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = '#0D001A';
-  ctx.fillRect(0, 0, w, h);
+  ctx.fillRect(0, 0, W, H);
 
-  paintPanels(ctx, panels, edits, state.photos, grade, k, night);
+  const frames = [];
+  for (let i = 0; i < panels.length; i++) {
+    const panel = panels[i];
+    const crop = crops[i] || { photo: i, zoom: 1, panX: 0, panY: 0, kind: 'face' };
+    const photo = state.photos[crop.photo];
+    ctx.save();
+    ctx.beginPath(); ctx.rect(panel.x, panel.y, panel.w, panel.h); ctx.clip();
+    let frame = null;
+    if (photo && photo.img) {
+      frame = drawPhoto(ctx, photo, panel, crop, grade, k);
+    } else {
+      drawPlaceholder(ctx, panel);
+    }
+    frames.push(frame);
+    for (const wash of grade.washes) {
+      paintWash(ctx, wash, panel.x, panel.y, panel.w, panel.h, k);
+    }
+    drawScene(ctx, panel.tag, panel, grade.night, seed, i);
+    halftonePanel(ctx, panel.x, panel.y, panel.w, panel.h, 0.10);
+    ctx.restore();
+  }
 
-  // Halftone corners, then the crisp uniform comic borders.
-  drawHalftone(ctx, w, h);
-  drawPanelBorders(ctx, panels, w, h);
-  // Foreground silhouettes in the bottom corners (clear of the faces).
-  drawPalm(ctx, w * 0.03, h * 0.995, s * 0.46, 0.15);
-  drawPalm(ctx, w * 0.97, h * 0.99, s * 0.3, -0.18);
-  // Film grain over everything.
-  drawGrain(ctx, w, h);
-  // Stickers.
-  for (const [key, paint] of Object.entries(STICKER_PAINT)) {
-    if (state.stickers[key]) paint(ctx, w, h);
+  // Corner halftone clusters, then the crisp comic borders.
+  halftoneCorners(ctx, W, H);
+  const S = Math.min(W, H);
+  const lw = Math.max(4, Math.min(7, S * 0.006));
+  ctx.lineWidth = lw;
+  ctx.strokeStyle = '#0D001A';
+  for (const p of panels) ctx.strokeRect(p.x, p.y, p.w, p.h);
+  // Cyan accent with glow along the hero panel's top edge.
+  const hero = panels.find(p => p.tag === 'hero');
+  if (hero) {
+    ctx.save();
+    ctx.shadowColor = '#00E5FF'; ctx.shadowBlur = 12;
+    ctx.strokeStyle = '#00E5FF'; ctx.lineWidth = Math.max(2, S * 0.002);
+    ctx.beginPath();
+    ctx.moveTo(hero.x, hero.y + lw / 2); ctx.lineTo(hero.x + hero.w, hero.y + lw / 2);
+    ctx.stroke();
+    ctx.restore();
   }
-  // Giant caption lettering on top, bleeding across panel edges.
-  drawCaption(ctx, state, w, h);
-  // Editor-only selection highlight (never exported).
-  if (opts.selection >= 0 && panels[opts.selection]) {
-    drawSelection(ctx, panels[opts.selection], opts.selection, s);
+  // Magenta accent with glow along the bottom edge of the fourth panel.
+  if (panels[3]) {
+    const p4 = panels[3];
+    ctx.save();
+    ctx.shadowColor = '#FF2E88'; ctx.shadowBlur = 12;
+    ctx.strokeStyle = '#FF2E88'; ctx.lineWidth = Math.max(2, S * 0.002);
+    ctx.beginPath();
+    ctx.moveTo(p4.x, p4.y + p4.h - lw / 2); ctx.lineTo(p4.x + p4.w, p4.y + p4.h - lw / 2);
+    ctx.stroke();
+    ctx.restore();
   }
-  ctx.restore();
+  // Thicker black outer border around the whole sheet.
+  ctx.lineWidth = lw * 1.4;
+  ctx.strokeStyle = '#0D001A';
+  ctx.strokeRect(0, 0, W, H);
+
+  // Two foreground palms in the bottom corners, clear of the faces.
+  drawPalm(ctx, W * 0.03, H * 1.0, H * 0.30, 0.16, false);
+  drawPalm(ctx, W * 0.97, H * 1.0, H * 0.20, -0.14, true);
+
+  // Fine film grain over everything.
+  grain(ctx, W, H, seed);
+
+  // Stickers, in order.
+  if (state.stickers.vice) viceCityBadge(ctx, W, H);
+  if (state.stickers.leonida) leonidaBadge(ctx, W, H);
+  if (state.stickers.stars) starsRow(ctx, W, H);
+  if (state.stickers.palm) palmBadge(ctx, W, H);
+
+  // Giant caption last, so nothing covers it.
+  paintTitle(ctx, state.title, state.subtitle, W, H, {
+    placement: state.placement, colour: state.titleColour, scale: state.titleScale,
+  });
+
+  // Editor-only selection outline.
+  if (opts.editor && state.selected >= 0 && panels[state.selected]) {
+    const p = panels[state.selected];
+    ctx.save();
+    ctx.setLineDash([10, 6]);
+    ctx.strokeStyle = '#00E5FF'; ctx.lineWidth = 2.5;
+    ctx.strokeRect(p.x + 3, p.y + 3, p.w - 6, p.h - 6);
+    ctx.setLineDash([]);
+    const label = `PANEL ${state.selected + 1}`;
+    ctx.font = `900 ${Math.max(11, S * 0.016)}px Arial`;
+    const tw = ctx.measureText(label).width + 16;
+    ctx.fillStyle = '#00E5FF';
+    ctx.fillRect(p.x + 8, p.y + 8, tw, Math.max(18, S * 0.028));
+    ctx.fillStyle = '#0D001A';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, p.x + 16, p.y + 8 + Math.max(18, S * 0.028) / 2);
+    ctx.restore();
+  }
+  return { panels, frames };
 }
 
-/** Render at one of the three post sizes into a fresh canvas (export path). */
-export function renderToCanvas(state, sizeId) {
-  const size = sizeById(sizeId);
+// Render at one of the three post sizes into a fresh canvas and return it.
+export function renderExport(state, sizeId) {
+  const size = SIZES[sizeId] || SIZES.landscape;
   const canvas = document.createElement('canvas');
-  canvas.width = size.w;
-  canvas.height = size.h;
-  renderCover(canvas.getContext('2d'), state, size.w, size.h);
+  canvas.width = size.w; canvas.height = size.h;
+  const ctx = canvas.getContext('2d');
+  renderCover(ctx, state, size.w, size.h, {});
   return canvas;
+}
+
+// Framing self-check helper: classify every panel of every concept/size.
+export function framingReport(state, concepts) {
+  let total = 0, cut = 0;
+  const bad = [];
+  for (const name of Object.keys(concepts)) {
+    const probe = applyConcept(cloneState(state), name);
+    for (const sizeId of Object.keys(SIZES)) {
+      const size = SIZES[sizeId];
+      const layout = layoutById(probe.layout);
+      const panels = layoutPanels(layout, size.w, size.h);
+      const crops = probe.cropsFor(probe.layout);
+      for (let i = 0; i < panels.length; i++) {
+        const crop = crops[i];
+        const photo = probe.photos[crop.photo];
+        if (!photo || !photo.img) continue;
+        const frame = computeFrame(photo.img, panels[i], crop, resolveFocus(photo));
+        const verdict = classifyFrame(frame, resolveFocus(photo));
+        total++;
+        if (verdict === 'cut') { cut++; bad.push(`${name}/${sizeId}/panel${i + 1}`); }
+      }
+    }
+  }
+  // Zoom / pan extremes on hero panels.
+  const probe = applyConcept(cloneState(state), 'Sunset Beach Heist');
+  const layout = layoutById(probe.layout);
+  for (const sizeId of Object.keys(SIZES)) {
+    const size = SIZES[sizeId];
+    const panels = layoutPanels(layout, size.w, size.h);
+    const hero = panels.find(p => p.tag === 'hero');
+    const photo = probe.photos[0];
+    if (!hero || !photo || !photo.img) continue;
+    for (const z of [1, 2, 4]) {
+      for (const px of [-1, 0, 1]) {
+        for (const py of [-1, 0, 1]) {
+          const frame = computeFrame(photo.img, hero, { zoom: z, panX: px, panY: py, kind: 'face' }, resolveFocus(photo));
+          const verdict = classifyFrame(frame, resolveFocus(photo));
+          total++;
+          if (verdict === 'cut') { cut++; bad.push(`extreme/${sizeId}/z${z}/p${px},${py}`); }
+        }
+      }
+    }
+  }
+  return { total, cut, bad };
 }

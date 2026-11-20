@@ -1,76 +1,59 @@
-// shots.js — reproducible screenshot scenes (v6).
-// ?shot=cover renders the EXPORTED cover full-bleed (the exact export render
-// path, blitted to the viewport); ?shot=editor shows the full editor with photos
-// loaded. Extra params: photo=<sample>, caption=<title>, sub=<text>,
-// preset=<concept id>, size=<post size>. window.__shotReady flips true once
-// fonts, photos and paint are done, so a screenshot script can wait on it.
-// The scene mechanics are unchanged from v4/v5 — the v6 skyline removal rides
-// along in the renderer these scenes call.
+// shots.js — reproducible screenshot scenes driven by the URL query string.
+// ?shot=cover|editor &preset=<concept> &size=<square|portrait|landscape>
+// &caption=<title> &sub=<subtitle> &photo=<sample>
+// Both scenes share one preparation step; two animation frames after the
+// paint, window.__shotReady flips true so a screenshot script can wait on it.
 
-import { applyPreset, presetById, SIZES } from './state.js';
+import { applyConcept } from './state.js';
 
-// Two animation frames after the paint, so the compositor has the final pixels.
-function markReady() {
-  requestAnimationFrame(() =>
-    requestAnimationFrame(() => {
-      window.__shotReady = true;
-    }),
-  );
-}
+export async function runShot(state, ed, params) {
+  const preset = params.get('preset') || 'Sunset Beach Heist';
+  const size = params.get('size');
+  const caption = params.get('caption');
+  const sub = params.get('sub');
+  const extraPhoto = params.get('photo');
+  const shot = params.get('shot') || 'cover';
 
-// Blit an export-resolution canvas onto the viewport-sized preview canvas.
-function blitCover(out) {
-  const preview = document.getElementById('preview');
-  const dpr = window.devicePixelRatio || 1;
-  const cssW = window.innerWidth;
-  const cssH = window.innerHeight;
-  preview.width = Math.round(cssW * dpr);
-  preview.height = Math.round(cssH * dpr);
-  preview.style.width = `${cssW}px`;
-  preview.style.height = `${cssH}px`;
-  const ctx = preview.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = '#0D001A';
-  ctx.fillRect(0, 0, cssW, cssH);
-  const scale = Math.min(cssW / out.width, cssH / out.height);
-  const dw = out.width * scale;
-  const dh = out.height * scale;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(out, (cssW - dw) / 2, (cssH - dh) / 2, dw, dh);
-}
+  if (state.photos.length === 0) await ed.loadSamples();
+  if (extraPhoto) {
+    const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = `samples/${extraPhoto}.jpg`; });
+    state.photos.push({ img, name: extraPhoto });
+  }
+  applyConcept(state, preset);
+  if (size && ['square', 'portrait', 'landscape'].includes(size)) state.size = size;
+  if (caption !== null) state.title = caption;
+  if (sub !== null) state.subtitle = sub;
+  state.selected = -1;
+  ed.refreshThumbs(); ed.refreshCropUI();
 
-// Apply the concept + any URL overrides shared by both scenes.
-async function prepareScene(params, api) {
-  const { state, editor } = api;
-  const preset = presetById(params.get('preset') ?? 'sunset-heist');
-  await editor.resetPhotos(preset.photos);
-  const extra = params.get('photo');
-  if (extra && !preset.photos.includes(extra)) await editor.loadSamples([extra]);
-  applyPreset(state, preset);
-  const sizeParam = params.get('size');
-  if (sizeParam && SIZES.some((s) => s.id === sizeParam)) state.size = sizeParam;
-  if (params.get('caption')) state.title = params.get('caption');
-  if (params.get('sub')) state.subtitle = params.get('sub');
-  return preset;
-}
-
-export async function runShot(params, api) {
-  const { state, editor, renderToCanvas } = api;
-  await prepareScene(params, api);
-
-  if (params.get('shot') === 'cover') {
+  if (shot === 'cover') {
+    // Render the exported cover at the post size through the exact export
+    // path and blit it full-bleed onto the viewport canvas.
+    const { renderExport, SIZES } = await import('./cover.js');
+    const sizeDef = SIZES[state.size];
+    const cover = renderExport(state, state.size);
+    const cv = ed.canvas;
+    const dpr = window.devicePixelRatio || 1;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
+    cv.style.width = vw + 'px'; cv.style.height = vh + 'px';
+    const g = cv.getContext('2d');
+    g.fillStyle = '#0D001A';
+    g.fillRect(0, 0, cv.width, cv.height);
+    const s = Math.min(cv.width / sizeDef.w, cv.height / sizeDef.h);
+    const dw = sizeDef.w * s, dh = sizeDef.h * s;
+    g.drawImage(cover, (cv.width - dw) / 2, (cv.height - dh) / 2, dw, dh);
     document.body.classList.add('shot-cover');
-    editor.syncControls();
-    // The exact export render, drawn to fill the viewport.
-    blitCover(renderToCanvas(state, state.size));
-    markReady();
-    return;
+  } else {
+    // Editor scene: full editor, samples loaded, first panel selected.
+    state.selected = 0;
+    ed.repaint();
+    ed.refreshCropUI();
+    ed.status('Sample photos loaded — click any panel to crop, then export.');
+    document.body.classList.add('shot-editor');
   }
 
-  // Editor scene: keep the whole UI, show the crop controls on panel 1.
-  editor.syncControls();
-  editor.selectPanel(0);
-  editor.setStatus('Sample photos loaded — click any panel to crop, then export.');
-  editor.requestRender();
-  markReady();
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  window.__shotReady = true;
 }

@@ -1,6 +1,1 @@
-[
-  {"name": "1-cover.jpg", "w": 1280, "h": 720, "query": "?shot=cover&preset=sunset-heist&size=landscape&caption=Sunset%20Heist"},
-  {"name": "2-editor.jpg", "w": 1280, "h": 720, "query": "?shot=editor&preset=sunset-heist"},
-  {"name": "3-cover.jpg", "w": 1024, "h": 1280, "query": "?shot=cover&preset=vice-strip&size=portrait&caption=Vice%20Strip"},
-  {"name": "4-cover.jpg", "w": 1280, "h": 720, "query": "?shot=cover&preset=neon-night&size=landscape&caption=Neon%20Night%20Drive"}
-]
+{"shots":[{"file":"1-cover.jpg","height":720,"query":"shot=cover&preset=Sunset%20Beach%20Heist&size=landscape&caption=SUNSET%20HEIST&sub=A%20VICE%20CITY%20STORY","width":1280},{"file":"2-editor.jpg","height":720,"query":"shot=editor&preset=Sunset%20Beach%20Heist","width":1280},{"file":"3-cover.jpg","height":1280,"query":"shot=cover&preset=Vice%20Strip&size=portrait&caption=VICE%20STRIP&sub=FIVE%20MOMENTS%20-%20ONE%20CITY","width":1024},{"file":"4-cover.jpg","height":720,"query":"shot=cover&preset=Neon%20Night%20Drive&size=landscape&caption=NEON%20NIGHT%20DRIVE&sub=AFTER%20DARK%20IN%20LEONIDA","width":1280}]}

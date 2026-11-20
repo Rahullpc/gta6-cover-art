@@ -1,46 +1,43 @@
-// main.js — boot Vice Cover Studio v6: create the state, wire the editor, wait
-// for the bundled display font, then either run a ?shot= screenshot scene or
-// load the four sample photos with the default concept so the first paint is a
-// full, face-safe cover. v6's first paint shows the skyline-free art direction:
-// no black buildings on any panel, five wanted stars under the VICE CITY badge
-// and a sun-free sunset sky (the night moon is untouched). Sunset Hero still
-// tiles five panels — no red car panel.
-
-import { createState, applyPreset, presetById, PRESETS, activeEdits } from './state.js';
-import { initEditor } from './editor.js';
-import { runShot } from './shots.js';
-import { renderToCanvas } from './cover.js';
+// main.js — boot: create the state, wire the editor, wait for the display
+// font, then run a screenshot scene when the URL asks for one, or load the
+// four samples with the default concept.
+import { createState, CONCEPTS, applyConcept, cloneState } from './state.js';
+import { createEditor, loadSamplesSync } from './editor.js';
+import { renderCover, renderExport, framingReport, SIZES } from './cover.js';
 import { exportDataURL } from './export.js';
-import { computeFrame, focusOf, faceStatus } from './framing.js';
-import { LAYOUTS, layoutById, defaultEdits } from './layouts.js';
+import { runShot } from './shots.js';
+import { LAYOUTS, layoutById, layoutPanels } from './layouts.js';
+import { defaultCrops } from './state.js';
+import { computeFrame, resolveFocus, classifyFrame } from './framing.js';
 
 const state = createState();
-const editor = initEditor(state);
+const canvas = document.getElementById('previewCanvas');
+const editor = createEditor(state, canvas);
 
-// The bundled OFL display font must be ready before the first lettering pass.
-try {
-  await document.fonts.load('900 80px "Vice Display"');
-  await document.fonts.ready;
-} catch {
-  // Canvas lettering falls back to Arial Black / sans-serif if the font fails.
+async function boot() {
+  const params = new URLSearchParams(location.search);
+  try { await document.fonts.load(`900 40px 'Noto Sans Condensed Black'`); } catch (e) {}
+  try { await document.fonts.ready; } catch (e) {}
+  if (params.has('shot')) {
+    await runShot(state, editor, params);
+  } else {
+    await editor.loadSamples();
+    applyConcept(state, 'Sunset Beach Heist');
+    editor.repaint();
+    editor.status('Sample photos loaded — click any panel to crop, then export.');
+  }
+  // Test hook: everything an automated check needs.
+  window.__test = {
+    state, editor,
+    render: renderCover, renderExport, exportDataURL,
+    framing: { computeFrame, resolveFocus, classifyFrame },
+    layouts: LAYOUTS, layoutById, layoutPanels,
+    defaultCrops, concepts: CONCEPTS,
+    applyConcept: (name) => applyConcept(state, name),
+    activeCrops: () => state.cropsFor(state.layout),
+    framingReport: () => framingReport(cloneState(state), CONCEPTS),
+    loadSamplesSync: () => loadSamplesSync(state),
+  };
 }
 
-const params = new URLSearchParams(location.search);
-if (params.get('shot')) {
-  await runShot(params, { state, editor, renderToCanvas });
-} else {
-  const preset = presetById('sunset-heist');
-  await editor.loadSamples(preset.photos);
-  applyPreset(state, preset);
-  editor.syncControls();
-  editor.requestRender();
-  editor.setStatus('4 sample photos + Sunset Beach Heist loaded. Upload your own, or hit a concept.');
-}
-
-// Test hook: the live state, the exact export render path, and the framing
-// engine so an automated check can verify every panel keeps faces whole.
-window.__viceCover = {
-  state, editor, renderToCanvas, exportDataURL,
-  computeFrame, focusOf, faceStatus,
-  LAYOUTS, layoutById, defaultEdits, PRESETS, applyPreset, activeEdits, presetById,
-};
+boot();

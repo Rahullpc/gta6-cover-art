@@ -1,53 +1,32 @@
-// export.js — PNG export (v6). Render the cover at a post size on a fresh canvas
-// and hand it to the browser as a download. The very same renderCover() call
-// paints the live preview, so the saved file matches the editor pixel for pixel
-// — including the v5 five-star wanted row, the sun-free day skies and the v6
-// skyline-free panels.
+// export.js — PNG export through the same renderer as the live preview.
+import { renderExport, SIZES } from './cover.js';
 
-import { renderToCanvas } from './cover.js';
-import { SIZES, sizeById } from './state.js';
-
-const fileNameFor = (size) => `vice-cover-${size.w}x${size.h}.png`;
-
-// Encode a canvas to a PNG blob and fire a download through a temporary
-// object-URL anchor. Resolves with the filename once the click has happened.
-function downloadCanvas(canvas, name) {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error('PNG encoding failed'));
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      const anchor = Object.assign(document.createElement('a'), { href: url, download: name });
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 4000);
-      resolve(name);
-    }, 'image/png');
-  });
+function download(canvas, filename, ed) {
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  if (ed) ed.status(`Exported ${filename}.`);
 }
 
-/** Render + download one PNG. Resolves with the filename once saved. */
-export function exportPNG(state, sizeId) {
-  const canvas = renderToCanvas(state, sizeId);
-  return downloadCanvas(canvas, fileNameFor(sizeById(sizeId)));
+export function exportPNG(state, sizeId, ed) {
+  const size = SIZES[sizeId];
+  const canvas = renderExport(state, sizeId);
+  download(canvas, `vice-cover-${size.w}x${size.h}.png`, ed);
+  return canvas;
 }
 
-/** Download all three post sizes, one after another, reporting each. */
-export async function exportAll(state, onEach) {
-  const names = [];
-  for (const size of SIZES) {
-    const name = await exportPNG(state, size.id);
-    names.push(name);
-    if (onEach) onEach(name);
-    await new Promise((r) => setTimeout(r, 400));
+export async function exportAll(state, ed) {
+  for (const id of ['square', 'portrait', 'landscape']) {
+    exportPNG(state, id, ed);
+    await new Promise(r => setTimeout(r, 350));
   }
-  return names;
+  if (ed) ed.status('Exported all 3 sizes.');
 }
 
-/** Test/screenshot hook: the exported PNG as a data URL, with no download. */
+// Data-URL variant of the same path, for tests and screenshots (no download).
 export function exportDataURL(state, sizeId) {
-  return renderToCanvas(state, sizeId).toDataURL('image/png');
+  return renderExport(state, sizeId).toDataURL('image/png');
 }
